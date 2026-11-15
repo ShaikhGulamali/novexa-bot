@@ -1,0 +1,27 @@
+{
+	email admin@novexa.duckdns.org
+	admin off
+}
+
+novexa.duckdns.org {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8080 {
+		header_up X-Real-IP {remote_host}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file C:\Users\ALI\Desktop\GULAMALI-ULTIMATE-BOT\logs\caddy-access.log {
+			roll_size 10mb
+			roll_keep 3
+		}
+		level INFO
+	}
+}

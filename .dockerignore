@@ -1,0 +1,43 @@
+# Git
+.git/
+.gitignore
+
+# Environment variables & local secrets
+.env
+.env.*
+!.env.example
+*.env
+
+# Python bytecode & cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Local Windows binaries & DLLs (replaced with Linux packages in container)
+ffmpeg.exe
+opus.dll
+libopus-0.dll
+*.dll
+*.exe
+
+# Development, scratch & backup directories
+scratch/
+backups/
+archive/
+.system_generated/
+*.log
+logs/*.log
+
+# Ephemeral SQLite WAL/SHM locks
+database/*.db-wal
+database/*.db-shm
+database/bot.db
+
+# IDE & Editor artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+

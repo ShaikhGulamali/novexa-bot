@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: novexa-bot
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: BOT_PREFIX
+        value: "/"
+      - key: ENVIRONMENT
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_REDIRECT_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OWNER_IDS
+        sync: false
+      - key: DISABLE_INSTANCE_LOCK
+        value: "true"
+
