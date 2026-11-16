@@ -276,6 +276,20 @@ class ConfigService:
         return await self.get_antinuke_config(guild_id)
 
     # ==================== 4. ANTI-SPAM & AUTOMOD ====================
+    # Dashboard/API field -> antispam_config column
+    _ANTISPAM_DB_MAP = {
+        "max_duplicates": "duplicate_threshold",
+        "timeout_duration_minutes": "mute_duration",
+        "block_invites": "invite_filter_enabled",
+        "block_links": "link_filter_enabled",
+    }
+    _ANTISPAM_COLUMNS = {
+        "enabled", "max_mentions", "max_emojis", "duplicate_threshold", "mute_duration",
+        "invite_filter_enabled", "link_filter_enabled", "caps_filter_enabled",
+        "blocked_words", "attachment_spam_limit", "automod_action",
+        "max_messages", "per_seconds",
+    }
+
     async def get_antispam_config(self, guild_id: int) -> Dict[str, Any]:
         query = "SELECT * FROM antispam_config WHERE guild_id = ?;"
         row = await db.fetchone(query, (guild_id,))
@@ -296,9 +310,11 @@ class ConfigService:
             }
         d = dict(row)
         d["enabled"] = bool(d.get("enabled", 1))
-        d["block_invites"] = bool(d.get("block_invites", 1))
-        d["block_links"] = bool(d.get("block_links", 1))
-        d["max_duplicates"] = d.get("max_messages_per_window", 3)
+        d["max_duplicates"] = d.get("duplicate_threshold", 3)
+        d["timeout_duration_minutes"] = max(1, (d.get("mute_duration", 300) or 300) // 60)
+        d["block_invites"] = bool(d.get("invite_filter_enabled", 1))
+        d["block_links"] = bool(d.get("link_filter_enabled", 1))
+        d["caps_filter_enabled"] = bool(d.get("caps_filter_enabled", 0))
         return d
 
     async def update_antispam_config(
@@ -312,24 +328,23 @@ class ConfigService:
         current = await self.get_antispam_config(guild_id)
         await db.execute("INSERT OR IGNORE INTO antispam_config (guild_id) VALUES (?);", (guild_id,))
 
-        key_mapping = {
-            "max_duplicates": "max_messages_per_window"
-        }
-
         clauses = []
         params = []
         for k, v in updates.items():
-            db_col = key_mapping.get(k, k)
-            if db_col in [
-                "enabled", "max_mentions", "max_emojis", "max_messages_per_window",
-                "time_window", "block_invites", "block_links", "timeout_duration_minutes",
-                "caps_filter_enabled", "blocked_words", "attachment_spam_limit", "automod_action"
-            ]:
-                old_v = current.get(k)
-                if v != old_v:
-                    clauses.append(f"{db_col} = ?")
-                    params.append(1 if v is True else (0 if v is False else v))
-                    await self._log_audit(guild_id, "antispam", k, old_v, v, actor_id, actor_tag, source)
+            db_col = self._ANTISPAM_DB_MAP.get(k, k)
+            if db_col not in self._ANTISPAM_COLUMNS:
+                continue
+            if db_col == "mute_duration" and isinstance(v, (int, float)):
+                db_val = int(v) * 60  # dashboard collects minutes, the engine stores seconds
+            elif isinstance(v, bool):
+                db_val = 1 if v else 0
+            else:
+                db_val = v
+            old_v = current.get(k)
+            if v != old_v:
+                clauses.append(f"{db_col} = ?")
+                params.append(db_val)
+                await self._log_audit(guild_id, "antispam", k, old_v, v, actor_id, actor_tag, source)
 
         if clauses:
             params.append(guild_id)
