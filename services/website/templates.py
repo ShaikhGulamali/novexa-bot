@@ -709,7 +709,7 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
         username = html.escape(user.get("username", "Member"))
         admin_link = ""
         try:
-            if int(user.get("id", 0)) in OWNER_IDS:
+            if user.get("is_owner") or int(user.get("id", 0)) in OWNER_IDS:
                 admin_link = '<a href="/admin" class="btn btn-outline" style="padding:8px 16px;font-size:13px;">👑 Admin</a>'
         except (TypeError, ValueError):
             admin_link = ""

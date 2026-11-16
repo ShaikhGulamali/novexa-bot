@@ -293,11 +293,19 @@ def create_app(bot) -> FastAPI:
                         "is_owner": g.get("owner", False),
                     })
 
+            is_owner = int(user_data["id"]) in OWNER_IDS
+            if not is_owner and bot is not None:
+                try:
+                    app_info = await bot.application_info()
+                    is_owner = bool(app_info.owner and int(app_info.owner.id) == int(user_data["id"]))
+                except Exception:
+                    is_owner = False
             user_session = {
                 "id": str(user_data["id"]),
                 "username": f"{user_data['username']}#{user_data.get('discriminator', '0')}",
                 "avatar_url": f"https://cdn.discordapp.com/avatars/{user_data['id']}/{user_data['avatar']}.png" if user_data.get("avatar") else None,
                 "guilds": managed_guilds,
+                "is_owner": is_owner,
             }
 
             token = create_session_token(user_session)
@@ -485,17 +493,28 @@ def create_app(bot) -> FastAPI:
         return {"status": "ok", "guild": livedata.guild_snapshot(guild), "members": livedata.member_rows(guild)}
 
 
-    def _is_owner(user: Optional[Dict[str, Any]]) -> bool:
+    owner_cache: Dict[str, Any] = {"bot_owner": None}
+
+    async def _is_owner(user: Optional[Dict[str, Any]]) -> bool:
         if not user:
             return False
-        return int(user.get("id", 0)) in OWNER_IDS
+        uid = int(user.get("id", 0))
+        if uid in OWNER_IDS:
+            return True
+        if owner_cache["bot_owner"] is None and bot is not None:
+            try:
+                info = await bot.application_info()
+                owner_cache["bot_owner"] = int(info.owner.id) if info.owner else 0
+            except Exception:
+                owner_cache["bot_owner"] = 0
+        return uid != 0 and uid == owner_cache["bot_owner"]
 
     @app.get("/admin", response_class=HTMLResponse)
     @app.get("/admin/dashboard", response_class=HTMLResponse)
     async def page_owner_admin(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
         if not user:
             return RedirectResponse("/login")
-        if not _is_owner(user):
+        if not await _is_owner(user):
             raise HTTPException(status_code=403, detail="Forbidden: Restricted to Bot Owners")
 
         data = await admin_service.snapshot(bot)
@@ -513,7 +532,7 @@ def create_app(bot) -> FastAPI:
 
     @app.post("/api/admin/plans/{plan_id}")
     async def api_admin_update_plan(plan_id: str, payload: AdminPlanPayload, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-        if not _is_owner(user):
+        if not await _is_owner(user):
             raise HTTPException(status_code=403, detail="Forbidden.")
         fields = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
         result = await premium_service.update_plan(plan_id, fields)
@@ -524,7 +543,7 @@ def create_app(bot) -> FastAPI:
 
     @app.post("/api/admin/orders/{order_id}/verify")
     async def api_admin_verify_order(order_id: str, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-        if not _is_owner(user):
+        if not await _is_owner(user):
             raise HTTPException(status_code=403, detail="Forbidden.")
         result = await premium_service.refresh_order(order_id, source=f"admin:{user['id']}")
         if not result.get("ok"):
@@ -538,7 +557,7 @@ def create_app(bot) -> FastAPI:
 
     @app.get("/api/admin/overview")
     async def api_admin_overview(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
-        if not _is_owner(user):
+        if not await _is_owner(user):
             raise HTTPException(status_code=403, detail="Forbidden.")
         return await admin_service.snapshot(bot)
 
