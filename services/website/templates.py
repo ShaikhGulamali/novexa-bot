@@ -559,6 +559,7 @@ body.drawer-open .nav-toggle span:nth-child(3) { transform: translateY(-6px) rot
     .nav-toggle { display: block; }
     .nav-links { display: none !important; }
     .navbar > div[style*="display:flex"] { display: none !important; }
+    .navbar > a.btn { display: none !important; }
 
     .mobile-drawer {
         display: block;
