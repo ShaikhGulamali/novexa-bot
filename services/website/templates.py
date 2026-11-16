@@ -3829,6 +3829,13 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
     const GUILD_ID = "{gid}";
     let activeTab = 'overview';
 
+    // Discord snowflakes exceed Number.MAX_SAFE_INTEGER - keep them as strings.
+    function snowflake(id) {{
+        const el = document.getElementById(id);
+        const raw = el && el.value ? String(el.value).trim() : '';
+        return raw || null;
+    }}
+
     function switchTab(tabKey) {{
         activeTab = tabKey;
         document.querySelectorAll('.dash-tab-btn').forEach(b => b.classList.remove('active'));
@@ -3894,8 +3901,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
         const bitrateRaw = parseInt(document.getElementById('voice_j2c_default_bitrate')?.value);
         const payload = {{
             is_enabled: document.getElementById('voice_j2c_is_enabled')?.checked || false,
-            generator_channel_id: parseInt(document.getElementById('voice_j2c_generator_channel_id')?.value) || null,
-            category_id: parseInt(document.getElementById('voice_j2c_category_id')?.value) || null,
+            generator_channel_id: snowflake('voice_j2c_generator_channel_id'),
+            category_id: snowflake('voice_j2c_category_id'),
             channel_name_format: document.getElementById('voice_j2c_channel_name_format')?.value || '🔊・{{username}}',
             default_user_limit: isNaN(limitRaw) ? 0 : Math.max(0, Math.min(99, limitRaw)),
             default_bitrate: (isNaN(bitrateRaw) ? 64 : Math.max(8, bitrateRaw)) * 1000,
@@ -3928,7 +3935,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
         if(activeTab === 'welcome') {{
             payload = {{
                 enabled: document.getElementById('welcome_enabled')?.checked || false,
-                channel_id: parseInt(document.getElementById('welcome_channel_id')?.value) || null,
+                channel_id: snowflake('welcome_channel_id'),
                 template_id: document.getElementById('welcome_template_id')?.value || 'minimal_welcome',
                 message_template: document.getElementById('welcome_message_template')?.value || '',
                 custom_color: document.getElementById('welcome_custom_color')?.value || '#5865F2',
@@ -3938,7 +3945,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             endpoint = '/api/guilds/' + GUILD_ID + '/config/goodbye';
             payload = {{
                 goodbye_enabled: document.getElementById('goodbye_goodbye_enabled')?.checked || false,
-                leave_channel_id: parseInt(document.getElementById('goodbye_leave_channel_id')?.value) || null,
+                leave_channel_id: snowflake('goodbye_leave_channel_id'),
                 goodbye_template_id: document.getElementById('goodbye_goodbye_template_id')?.value || 'minimal_dark',
                 leave_embed_enabled: document.getElementById('goodbye_leave_embed_enabled')?.checked || false,
                 leave_message_template: document.getElementById('goodbye_leave_message_template')?.value || '',
@@ -3947,8 +3954,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             endpoint = '/api/guilds/' + GUILD_ID + '/config/autoroles';
             const mrole = document.getElementById('autoroles_member_role_id')?.value;
             payload = {{
-                auto_roles: mrole ? [parseInt(mrole)] : [],
-                bot_role_id: parseInt(document.getElementById('autoroles_bot_role_id')?.value) || null,
+                auto_roles: mrole ? [String(mrole)] : [],
+                bot_role_id: snowflake('autoroles_bot_role_id'),
             }};
         }} else if(activeTab === 'antinuke') {{
             endpoint = '/api/guilds/' + GUILD_ID + '/security';
@@ -4003,7 +4010,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
         }} else if(activeTab === 'moderation') {{
             endpoint = '/api/guilds/' + GUILD_ID + '/config/moderation';
             payload = {{
-                mod_log_channel_id: parseInt(document.getElementById('moderation_mod_log_channel_id')?.value) || null,
+                mod_log_channel_id: snowflake('moderation_mod_log_channel_id'),
                 dm_on_punish: document.getElementById('moderation_dm_on_punish')?.checked || false,
                 max_warnings_before_kick: parseInt(document.getElementById('moderation_max_warnings_before_kick')?.value) || 3,
                 max_warnings_before_ban: parseInt(document.getElementById('moderation_max_warnings_before_ban')?.value) || 5,
@@ -4012,22 +4019,22 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             endpoint = '/api/guilds/' + GUILD_ID + '/config/tickets';
             payload = {{
                 tickets_enabled: document.getElementById('tickets_tickets_enabled')?.checked || false,
-                category_id: parseInt(document.getElementById('tickets_category_id')?.value) || null,
-                support_role_id: parseInt(document.getElementById('tickets_support_role_id')?.value) || null,
-                transcript_channel_id: parseInt(document.getElementById('tickets_transcript_channel_id')?.value) || null,
+                category_id: snowflake('tickets_category_id'),
+                support_role_id: snowflake('tickets_support_role_id'),
+                transcript_channel_id: snowflake('tickets_transcript_channel_id'),
                 panel_title: document.getElementById('tickets_panel_title')?.value || 'Support Tickets',
                 panel_description: document.getElementById('tickets_panel_description')?.value || 'Click below to create a ticket.',
             }};
         }} else if(activeTab === 'logging') {{
             endpoint = '/api/guilds/' + GUILD_ID + '/config/logging';
             payload = {{
-                joins_channel_id: parseInt(document.getElementById('logging_joins_channel_id')?.value) || null,
-                leaves_channel_id: parseInt(document.getElementById('logging_leaves_channel_id')?.value) || null,
-                message_edits_channel_id: parseInt(document.getElementById('logging_message_edits_channel_id')?.value) || null,
-                message_deletes_channel_id: parseInt(document.getElementById('logging_message_deletes_channel_id')?.value) || null,
-                role_changes_channel_id: parseInt(document.getElementById('logging_role_changes_channel_id')?.value) || null,
-                channel_changes_channel_id: parseInt(document.getElementById('logging_channel_changes_channel_id')?.value) || null,
-                bans_channel_id: parseInt(document.getElementById('logging_bans_channel_id')?.value) || null,
+                joins_channel_id: snowflake('logging_joins_channel_id'),
+                leaves_channel_id: snowflake('logging_leaves_channel_id'),
+                message_edits_channel_id: snowflake('logging_message_edits_channel_id'),
+                message_deletes_channel_id: snowflake('logging_message_deletes_channel_id'),
+                role_changes_channel_id: snowflake('logging_role_changes_channel_id'),
+                channel_changes_channel_id: snowflake('logging_channel_changes_channel_id'),
+                bans_channel_id: snowflake('logging_bans_channel_id'),
             }};
         }} else if(activeTab === 'roles') {{
             endpoint = '/api/guilds/' + GUILD_ID + '/config/roles';
@@ -4043,8 +4050,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             endpoint = '/api/guilds/' + GUILD_ID + '/config/music';
             payload = {{
                 is_247: document.getElementById('music_is_247')?.checked || false,
-                voice_channel_id: parseInt(document.getElementById('music_voice_channel_id')?.value) || null,
-                text_channel_id: parseInt(document.getElementById('music_text_channel_id')?.value) || null,
+                voice_channel_id: snowflake('music_voice_channel_id'),
+                text_channel_id: snowflake('music_text_channel_id'),
                 default_volume: parseInt(document.getElementById('music_default_volume')?.value) || 100,
             }};
         }} else if(activeTab === 'economy') {{
@@ -4077,12 +4084,12 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
                 leveling_enabled: document.getElementById('leveling_leveling_enabled')?.checked || false,
                 xp_per_message: parseInt(document.getElementById('leveling_xp_per_message')?.value) || 20,
                 xp_cooldown: parseInt(document.getElementById('leveling_xp_cooldown')?.value) || 60,
-                level_up_channel_id: parseInt(document.getElementById('leveling_level_up_channel_id')?.value) || null,
+                level_up_channel_id: snowflake('leveling_level_up_channel_id'),
             }};
         }} else if(activeTab === 'giveaways') {{
             endpoint = '/api/guilds/' + GUILD_ID + '/config/giveaways';
             payload = {{
-                giveaway_log_channel_id: parseInt(document.getElementById('giveaways_giveaway_log_channel_id')?.value) || null,
+                giveaway_log_channel_id: snowflake('giveaways_giveaway_log_channel_id'),
             }};
         }} else if(activeTab === 'reaction_roles') {{
             showToast('Reaction roles are configured via the Bind button below.');
@@ -4103,7 +4110,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             endpoint = '/api/guilds/' + GUILD_ID + '/config/voice_channels';
             payload = {{
                 is_247: document.getElementById('voice_channels_is_247')?.checked || false,
-                voice_channel_id: parseInt(document.getElementById('voice_channels_voice_channel_id')?.value) || null,
+                voice_channel_id: snowflake('voice_channels_voice_channel_id'),
             }};
         }} else if(activeTab === 'backups') {{
             showToast('Create and restore backups using the dedicated Snapshot controls.');
@@ -4116,8 +4123,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
                 upi_id: document.getElementById('integrations_upi_id')?.value || '',
                 qr_image_url: document.getElementById('integrations_qr_image_url')?.value || '',
                 instructions: document.getElementById('integrations_instructions')?.value || '',
-                staff_role_id: parseInt(document.getElementById('integrations_staff_role_id')?.value) || null,
-                log_channel_id: parseInt(document.getElementById('integrations_log_channel_id')?.value) || null,
+                staff_role_id: snowflake('integrations_staff_role_id'),
+                log_channel_id: snowflake('integrations_log_channel_id'),
             }};
         }} else if(activeTab === 'premium') {{
             showToast('Visit the Premium Plans page to upgrade server subscriptions.');

@@ -739,12 +739,26 @@ def create_app(bot) -> FastAPI:
         cfg = await config_service.get_module_config(guild_id, module)
         return {"status": "ok", "config": cfg}
 
+    def _coerce_snowflakes(value: Any) -> Any:
+        """Keep 19-digit Discord ids exact: the browser sends them as strings."""
+        if isinstance(value, dict):
+            out = {}
+            for k, v in value.items():
+                if isinstance(v, str) and k.endswith("_id") and v.isdigit() and len(v) <= 20:
+                    out[k] = int(v)
+                else:
+                    out[k] = _coerce_snowflakes(v)
+            return out
+        if isinstance(value, list):
+            return [int(v) if isinstance(v, str) and v.isdigit() and len(v) <= 20 else _coerce_snowflakes(v) for v in value]
+        return value
+
     @app.post("/api/guilds/{guild_id}/config/{module}")
     async def api_save_module_config(guild_id: int, module: str, request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
         if not user:
             raise HTTPException(status_code=401, detail="Unauthorized")
         try:
-            body = await request.json()
+            body = _coerce_snowflakes(await request.json())
         except Exception:
             body = {}
         updated = await config_service.update_module_config(
