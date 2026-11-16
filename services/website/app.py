@@ -163,11 +163,23 @@ def create_app(bot) -> FastAPI:
         guilds = []
         if user:
             guilds = [g for g in (user.get("guilds") or []) if g.get("bot_in_guild")]
-            if not guilds and bot and int(user["id"]) in OWNER_IDS:
-                guilds = [
-                    {"id": str(g.id), "name": g.name, "icon_url": str(g.icon.url) if g.icon else None}
-                    for g in bot.guilds
-                ]
+            user_id = int(user["id"])
+            known = {str(g.get("id")) for g in guilds}
+            if bot and hasattr(bot, "guilds"):
+                for g in bot.guilds:
+                    if str(g.id) in known:
+                        continue
+                    allowed = user_id in OWNER_IDS or g.owner_id == user_id
+                    if not allowed:
+                        member = g.get_member(user_id)
+                        if member is not None:
+                            allowed = member.guild_permissions.administrator or member.guild_permissions.manage_guild
+                    if allowed:
+                        guilds.append({
+                            "id": str(g.id),
+                            "name": g.name,
+                            "icon_url": str(g.icon.url) if g.icon else None,
+                        })
         plans = await premium_service.get_plans()
         return HTMLResponse(render_premium(bot, user, plans, guilds))
 
@@ -600,9 +612,24 @@ def create_app(bot) -> FastAPI:
         phone: str = ""
         name: Optional[str] = ""
 
-    def _user_manages_guild(user: Dict[str, Any], guild_id: int) -> bool:
-        if int(user.get("id", 0)) in OWNER_IDS:
+    async def _user_manages_guild(user: Dict[str, Any], guild_id: int) -> bool:
+        user_id = int(user.get("id", 0))
+        if user_id in OWNER_IDS:
             return True
+        guild = bot.get_guild(guild_id) if (bot and hasattr(bot, "get_guild")) else None
+        if guild is not None:
+            if guild.owner_id == user_id:
+                return True
+            member = guild.get_member(user_id)
+            if member is None:
+                try:
+                    member = await guild.fetch_member(user_id)
+                except Exception:
+                    member = None
+            if member is not None:
+                perms = member.guild_permissions
+                if perms.administrator or perms.manage_guild:
+                    return True
         managed = {str(g.get("id")) for g in (user.get("guilds") or [])}
         return str(guild_id) in managed
 
@@ -610,7 +637,7 @@ def create_app(bot) -> FastAPI:
     async def api_premium_checkout(payload: CheckoutPayload, request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
         if not user:
             raise HTTPException(status_code=401, detail="Login with Discord first.")
-        if not _user_manages_guild(user, payload.guild_id):
+        if not await _user_manages_guild(user, payload.guild_id):
             raise HTTPException(status_code=403, detail="You do not manage that server.")
         base_url = str(request.base_url).rstrip("/")
         result = await premium_service.create_checkout(

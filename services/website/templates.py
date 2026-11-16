@@ -1338,7 +1338,7 @@ def render_premium(bot, user: Optional[Dict[str, Any]] = None, plans=None, guild
             const res = await fetch('/api/premium/checkout', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ plan_id: currentPlanId, guild_id: parseInt(guildId), email: email, phone: phone, name: name }})
+                body: JSON.stringify({{ plan_id: currentPlanId, guild_id: guildId, email: email, phone: phone, name: name }})
             }});
             const data = await res.json().catch(() => ({{}}));
             if (!res.ok) {{
