@@ -1456,9 +1456,17 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
                 """
 
     # Templates List for Welcome Studio
+    _selected_template = (configs.get("welcome", {}) or {}).get("template_id") or "novexa_exclusive"
     templates_options = ""
     for t in list_templates():
-        templates_options += f'<option value="{t["id"]}">{t["emoji"]} {t["name"]}</option>'
+        bg1, bg2 = t["bg_gradient"]
+        sel = " selected" if t["id"] == _selected_template else ""
+        templates_options += (
+            f'<option value="{t["id"]}" data-accent="{t["accent_hex"]}" data-primary="{t["primary_hex"]}"'
+            f' data-bg1="rgb({bg1[0]},{bg1[1]},{bg1[2]})" data-bg2="rgb({bg2[0]},{bg2[1]},{bg2[2]})"'
+            f' data-tagline="{html.escape(t["tagline"])}" data-name-color="rgb({t["name_color"][0]},{t["name_color"][1]},{t["name_color"][2]})"'
+            f'{sel}>{t["emoji"]} {t["name"]}</option>'
+        )
 
     # Channels and Roles Options
     channel_opts = '<option value="">-- None / Select Channel --</option>'
@@ -2041,7 +2049,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
 
                     <div class="form-group">
                         <label>Visual Banner Style (20 Presets)</label>
-                        <select class="form-control" id="welcome_template_id" onchange="updateWelcomePreview()">
+                        <select class="form-control" id="welcome_template_id" onchange="applyWelcomeTheme()">
                             {templates_options}
                         </select>
                     </div>
@@ -3296,19 +3304,46 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
         if(tabBtn) {{
             document.getElementById('active-tab-title').innerText = tabBtn.innerText.trim();
         }}
+
+        if(tabKey === 'welcome' && typeof updateWelcomePreview === 'function') updateWelcomePreview();
+    }}
+
+    function currentWelcomeOption() {{
+        const sel = document.getElementById('welcome_template_id');
+        return sel && sel.selectedIndex >= 0 ? sel.options[sel.selectedIndex] : null;
+    }}
+
+    function applyWelcomeTheme() {{
+        const opt = currentWelcomeOption();
+        const colorBox = document.getElementById('welcome_custom_color');
+        if(opt && colorBox) colorBox.value = opt.dataset.accent || colorBox.value;
+        updateWelcomePreview();
     }}
 
     function updateWelcomePreview() {{
-        const color = document.getElementById('welcome_custom_color')?.value || '#5865F2';
+        const opt = currentWelcomeOption();
+        const color = document.getElementById('welcome_custom_color')?.value || opt?.dataset.accent || '#5865F2';
         const card = document.getElementById('preview-card');
         const badge = document.getElementById('preview-badge');
         const avatar = document.getElementById('preview-avatar');
+        const title = document.getElementById('preview-title');
         if(card) {{
+            if(opt && opt.dataset.bg1 && opt.dataset.bg2) {{
+                card.style.background = 'linear-gradient(135deg, ' + opt.dataset.bg1 + ', ' + opt.dataset.bg2 + ')';
+            }}
             card.style.borderColor = color;
             card.style.boxShadow = '0 0 25px ' + color + '40';
         }}
-        if(badge) badge.style.color = color;
-        if(avatar) avatar.style.borderColor = color;
+        if(badge) {{
+            if(opt && opt.dataset.tagline) badge.textContent = opt.dataset.tagline;
+            badge.style.color = color;
+            badge.style.borderColor = color + '66';
+        }}
+        if(title && opt && opt.dataset.nameColor) title.style.color = opt.dataset.nameColor;
+        if(avatar) {{
+            avatar.style.borderColor = color;
+            avatar.style.boxShadow = '0 0 15px ' + color;
+        }}
     }}
 
     async function saveJoinToCreate() {{

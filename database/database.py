@@ -337,7 +337,14 @@ class DatabaseManager:
             background_url TEXT DEFAULT '',
             leave_channel_id INTEGER,
             leave_template TEXT DEFAULT '{username} has left **{server}**.',
-            is_enabled INTEGER DEFAULT 1
+            is_enabled INTEGER DEFAULT 1,
+            template_id TEXT DEFAULT 'novexa_exclusive',
+            title TEXT DEFAULT 'Welcome to {server}!',
+            custom_color TEXT DEFAULT '#5865F2',
+            dm_enabled INTEGER DEFAULT 0,
+            dm_template TEXT DEFAULT 'Welcome to **{server}**, {user}! Read our rules to get started.',
+            autorole_enabled INTEGER DEFAULT 0,
+            autorole_id INTEGER DEFAULT NULL
         );
 
         -- Ticket Panels and Active Tickets

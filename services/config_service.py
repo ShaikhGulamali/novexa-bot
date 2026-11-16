@@ -171,6 +171,11 @@ class ConfigService:
         # Ensure record exists
         await db.execute("INSERT OR IGNORE INTO welcome_config (guild_id) VALUES (?);", (guild_id,))
 
+        # The dashboard's single "enabled" master switch drives both banner and embed rows
+        if "enabled" in updates:
+            flag = 1 if updates["enabled"] else 0
+            updates = {**updates, "banner_enabled": flag, "embed_enabled": flag}
+
         allowed = [
             "channel_id", "template_id", "banner_enabled", "embed_enabled",
             "title", "message_template", "custom_color", "dm_enabled", "dm_template",
