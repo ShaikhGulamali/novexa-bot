@@ -113,16 +113,7 @@ class PremiumService:
                         (plan_id, name, description, price_inr, billing_period, max_guilds, features_json,
                          tier_level, max_backups, max_ai_daily, tier_color, audit_retention_days, perks_json)
                     VALUES (?, ?, ?, ?, 'monthly', 1, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(plan_id) DO UPDATE SET
-                        name = excluded.name,
-                        description = excluded.description,
-                        price_inr = excluded.price_inr,
-                        tier_level = excluded.tier_level,
-                        max_backups = excluded.max_backups,
-                        max_ai_daily = excluded.max_ai_daily,
-                        tier_color = excluded.tier_color,
-                        audit_retention_days = excluded.audit_retention_days,
-                        perks_json = excluded.perks_json
+                    ON CONFLICT(plan_id) DO NOTHING
                     """,
                     (
                         plan["plan_id"],
@@ -149,15 +140,78 @@ class PremiumService:
         merged: List[Dict[str, Any]] = []
         for seed in PLAN_SEEDS:
             row = by_id.get(seed["plan_id"], {})
+            perks = row.get("perks") or seed["perks"]
             merged.append({
                 **seed,
                 "price_inr": float(row.get("price_inr", seed["price_inr"])),
                 "name": row.get("name", seed["name"]),
                 "description": row.get("description", seed["description"]),
-                "tier_color": row.get("tier_color", seed["tier_color"]),
-                "perks": seed["perks"],
+                "tier_color": row.get("tier_color") or seed["tier_color"],
+                "tier_level": int(row.get("tier_level", seed["tier_level"]) or seed["tier_level"]),
+                "max_backups": int(row.get("max_backups", seed["max_backups"]) or 0),
+                "max_ai_daily": int(row.get("max_ai_daily", seed["max_ai_daily"]) or 0),
+                "audit_retention_days": int(row.get("audit_retention_days", seed["audit_retention_days"]) or 0),
+                "perks": perks if isinstance(perks, list) else seed["perks"],
             })
         return merged
+
+    async def update_plan(self, plan_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        await self.ensure_seeded()
+        row = await db.fetchone("SELECT * FROM premium_plans WHERE plan_id = ?;", (plan_id,))
+        if not row:
+            return {"ok": False, "reason": "Unknown plan."}
+        current = dict(row)
+
+        def _int(key: str, minimum: int, maximum: int, fallback: int) -> int:
+            try:
+                value = int(fields.get(key, fallback))
+            except (TypeError, ValueError):
+                value = fallback
+            return max(minimum, min(maximum, value))
+
+        try:
+            price = float(fields.get("price_inr", current.get("price_inr", 0)))
+        except (TypeError, ValueError):
+            price = float(current.get("price_inr", 0))
+        if price < 1:
+            return {"ok": False, "reason": "Price must be at least ₹1."}
+
+        name = str(fields.get("name") or current.get("name") or plan_id.title())[:80]
+        description = str(fields.get("description") if fields.get("description") is not None else current.get("description") or "")[:400]
+        color = str(fields.get("tier_color") or current.get("tier_color") or "#FF2D55")[:9]
+        if not re.match(r"^#[0-9A-Fa-f]{6}$", color):
+            color = "#FF2D55"
+
+        perks_raw = fields.get("perks")
+        if isinstance(perks_raw, list):
+            perks = [str(p).strip()[:120] for p in perks_raw if str(p).strip()][:12]
+        elif isinstance(perks_raw, str):
+            perks = [line.strip()[:120] for line in perks_raw.splitlines() if line.strip()][:12]
+        else:
+            perks = json.loads(current.get("perks_json") or "[]")
+
+        await db.execute(
+            """
+            UPDATE premium_plans
+            SET name = ?, description = ?, price_inr = ?, tier_level = ?, max_backups = ?,
+                max_ai_daily = ?, tier_color = ?, audit_retention_days = ?, perks_json = ?
+            WHERE plan_id = ?;
+            """,
+            (
+                name,
+                description,
+                price,
+                _int("tier_level", 1, 10, int(current.get("tier_level") or 1)),
+                _int("max_backups", 0, 1000, int(current.get("max_backups") or 0)),
+                _int("max_ai_daily", 0, 100000, int(current.get("max_ai_daily") or 0)),
+                color,
+                _int("audit_retention_days", 0, 3650, int(current.get("audit_retention_days") or 30)),
+                json.dumps(perks),
+                plan_id,
+            ),
+        )
+        plan = await self.get_plan(plan_id)
+        return {"ok": True, "plan": plan}
 
     async def get_plan(self, plan_id: str) -> Optional[Dict[str, Any]]:
         for plan in await self.get_plans():

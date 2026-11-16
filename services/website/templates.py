@@ -14,7 +14,7 @@ import html
 import json
 import math
 from typing import List, Dict, Any, Optional
-from config import BOT_NAME, BOT_VERSION
+from config import BOT_NAME, BOT_VERSION, OWNER_IDS
 from utils.welcome_templates import list_templates
 from services.feature_registry import FEATURE_REGISTRY, FEATURE_CATEGORIES
 
@@ -707,8 +707,15 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
     if user:
         avatar = user.get("avatar_url") or "https://cdn.discordapp.com/embed/avatars/0.png"
         username = html.escape(user.get("username", "Member"))
+        admin_link = ""
+        try:
+            if int(user.get("id", 0)) in OWNER_IDS:
+                admin_link = '<a href="/admin" class="btn btn-outline" style="padding:8px 16px;font-size:13px;">👑 Admin</a>'
+        except (TypeError, ValueError):
+            admin_link = ""
         user_section = f"""
         <div style="display:flex;align-items:center;gap:12px;">
+            {admin_link}
             <a href="/dashboard" class="btn btn-primary" style="padding:8px 16px;font-size:13px;">⚡ Dashboard</a>
             <a href="/dashboard" style="display:flex;align-items:center;gap:8px;">
                 <img src="{avatar}" style="width:32px;height:32px;border-radius:50%;border:2px solid var(--accent);">
@@ -726,6 +733,7 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
             <a href="/login" class="mobile-drawer-link">Login with Discord</a>
         """ if not user else f"""
             <a href="/dashboard" class="mobile-drawer-link">⚡ Dashboard</a>
+            {('<a href="/admin" class="mobile-drawer-link">👑 Admin Panel</a>' if admin_link else '')}
             <a href="/api/auth/logout" class="mobile-drawer-link" style="color:var(--danger);">Logout</a>
         """
 
@@ -4650,11 +4658,143 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
 """
 
 # ==================== 14. OWNER ADMIN DASHBOARD ====================
-def render_owner_dashboard(bot, user: Dict[str, Any], stats: Dict[str, Any]) -> str:
-    guild_count = len(bot.guilds) if (bot and hasattr(bot, "guilds")) else 0
-    member_count = sum(g.member_count or 0 for g in bot.guilds) if (bot and hasattr(bot, "guilds")) else 0
-    uptime = stats.get("uptime", "Operational")
-    db_size = stats.get("db_size_kb", 0)
+def _admin_money(value) -> str:
+    try:
+        return "₹{:,.0f}".format(float(value or 0))
+    except (TypeError, ValueError):
+        return "₹0"
+
+
+def render_owner_dashboard(bot, user: Dict[str, Any], data: Dict[str, Any]) -> str:
+    data = data or {}
+    stats = data.get("stats", {}) or {}
+    plans = data.get("plans", []) or []
+    orders = data.get("orders", []) or []
+    guilds = data.get("guilds", []) or []
+    buyers = data.get("buyers", []) or []
+
+    plan_cards = ""
+    for p in plans:
+        pid = str(p.get("plan_id", ""))
+        perk_text = "\n".join(str(x) for x in (p.get("perks") or []))
+        color = html.escape(str(p.get("tier_color") or "#FF2D55"))
+        try:
+            price_value = int(float(p.get("price_inr", 0)))
+        except (TypeError, ValueError):
+            price_value = 0
+        plan_cards += f"""
+        <div class="card" style="border-top:4px solid {color};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap;">
+                <span class="badge badge-accent">{html.escape(pid.upper())}</span>
+                <span style="color:var(--text-dim);font-size:12px;">plan_id: {html.escape(pid)}</span>
+            </div>
+            <div class="form-group">
+                <label>Plan Name</label>
+                <input class="form-control" id="plan_{pid}_name" value="{html.escape(str(p.get('name', '')))}">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input class="form-control" id="plan_{pid}_desc" value="{html.escape(str(p.get('description', '')))}">
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;">
+                <div class="form-group"><label>Price (₹)</label><input class="form-control" type="number" min="1" id="plan_{pid}_price" value="{price_value}"></div>
+                <div class="form-group"><label>Tier</label><input class="form-control" type="number" min="1" max="10" id="plan_{pid}_tier" value="{int(p.get('tier_level', 1) or 1)}"></div>
+                <div class="form-group"><label>Backups</label><input class="form-control" type="number" min="0" id="plan_{pid}_backups" value="{int(p.get('max_backups', 0) or 0)}"></div>
+                <div class="form-group"><label>AI / day</label><input class="form-control" type="number" min="0" id="plan_{pid}_ai" value="{int(p.get('max_ai_daily', 0) or 0)}"></div>
+                <div class="form-group"><label>Colour</label><input class="form-control" id="plan_{pid}_color" value="{color}"></div>
+            </div>
+            <div class="form-group">
+                <label>Perks (one per line)</label>
+                <textarea class="form-control" rows="6" id="plan_{pid}_perks">{html.escape(perk_text)}</textarea>
+            </div>
+            <button class="btn btn-primary" style="width:100%;" onclick="savePlan('{pid}')">Save {html.escape(str(p.get('name', pid)))}</button>
+        </div>
+        """
+
+    order_rows = ""
+    for o in orders:
+        oid = html.escape(str(o.get("order_id", "")))
+        ostatus = str(o.get("status", "CREATED"))
+        if ostatus.upper() == "PAID":
+            status_badge = f'<span class="badge badge-success">{html.escape(ostatus)}</span>'
+        elif ostatus.upper() == "CREATED":
+            status_badge = f'<span class="badge badge-gold">{html.escape(ostatus)}</span>'
+        else:
+            status_badge = f'<span class="badge" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#f87171;">{html.escape(ostatus)}</span>'
+        if o.get("granted"):
+            granted_cell = '<span style="color:#34d399;font-weight:700;">Granted</span>'
+            action_cell = ""
+        else:
+            granted_cell = '<span style="color:var(--text-dim);">No</span>'
+            action_cell = f'<button class="btn btn-outline" style="padding:6px 10px;font-size:11px;" onclick="verifyOrder(\'{oid}\')">Verify</button>'
+        order_rows += f"""
+            <tr>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-family:monospace;font-size:12px;">{oid}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{html.escape(str(o.get('guild_name', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{html.escape(str(o.get('user_name', '')))}<div style="font-size:11px;color:var(--text-dim);">{html.escape(str(o.get('customer_email', '') or ''))}</div></td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{html.escape(str(o.get('plan_name', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-weight:700;">{_admin_money(o.get('amount'))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{status_badge}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{granted_cell}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);">{html.escape(str(o.get('created_at', '') or ''))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{action_cell}</td>
+            </tr>
+        """
+    if not order_rows:
+        order_rows = '<tr><td colspan="9" style="padding:22px 8px;text-align:center;color:var(--text-dim);">No orders yet. A paid checkout lands here instantly.</td></tr>'
+
+    server_rows = ""
+    for g in guilds:
+        if g.get("plan"):
+            premium_cell = '<span class="badge badge-gold">' + html.escape(str(g.get("plan"))) + '</span>'
+            expiry = str(g.get("expires_at", "") or "")
+            if expiry:
+                premium_cell += '<div style="font-size:11px;color:var(--text-dim);">until ' + html.escape(expiry) + '</div>'
+        else:
+            premium_cell = '<span style="color:var(--text-dim);">Free</span>'
+        server_rows += f"""
+            <tr>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-weight:700;color:#fff;">{html.escape(str(g.get('name', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-family:monospace;font-size:12px;">{html.escape(str(g.get('id', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{int(g.get('members', 0) or 0):,}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{html.escape(str(g.get('owner_name', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{premium_cell}</td>
+            </tr>
+        """
+    if not server_rows:
+        server_rows = '<tr><td colspan="5" style="padding:22px 8px;text-align:center;color:var(--text-dim);">Bot is in no servers yet.</td></tr>'
+
+    buyer_rows = ""
+    for b in buyers:
+        spend = _admin_money(b.get("spend"))
+        buyer_rows += f"""
+            <tr>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-weight:700;color:#fff;">{html.escape(str(b.get('user_name', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-family:monospace;font-size:12px;">{html.escape(str(b.get('user_id', '')))}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);">{int(b.get('paid_orders', 0) or 0)} / {int(b.get('orders', 0) or 0)}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-weight:700;color:#34d399;">{spend}</td>
+                <td style="padding:10px 8px;border-top:1px solid var(--border);font-size:12px;color:var(--text-dim);">{html.escape(str(b.get('last_order', '') or ''))}</td>
+            </tr>
+        """
+    if not buyer_rows:
+        buyer_rows = '<tr><td colspan="5" style="padding:22px 8px;text-align:center;color:var(--text-dim);">No buyers yet.</td></tr>'
+
+    kpi = [
+        ("Connected Servers", f"{int(stats.get('guilds', 0) or 0):,}", "#fff"),
+        ("People Reached", f"{int(stats.get('members', 0) or 0):,}", "#fff"),
+        ("Premium Servers", f"{int(stats.get('premium_guilds', 0) or 0):,}", "#fbbf24"),
+        ("Paid Orders", f"{int(stats.get('paid_orders', 0) or 0):,}", "#34d399"),
+        ("Revenue", _admin_money(stats.get("revenue")), "var(--accent)"),
+        ("Unique Buyers", f"{int(stats.get('buyers', 0) or 0):,}", "#fff"),
+    ]
+    kpi_cards = ""
+    for label, value, color in kpi:
+        kpi_cards += f"""
+        <div class="card">
+            <div style="font-size:28px;font-weight:900;color:{color};">{value}</div>
+            <div style="font-size:12px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{label}</div>
+        </div>
+        """
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -4668,61 +4808,129 @@ def render_owner_dashboard(bot, user: Dict[str, Any], stats: Dict[str, Any]) -> 
 <body>
     {_render_nav(user, 'admin')}
     <div class="container">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;flex-wrap:wrap;gap:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:16px;">
             <div>
                 <div class="badge badge-accent" style="margin-bottom:8px;">MASTER CONSOLE</div>
-                <h1 style="font-size:32px;font-weight:900;color:#fff;">Owner Administration Panel</h1>
-                <p style="color:var(--text-muted);font-size:14px;">Restricted to configured bot owner accounts.</p>
+                <h1 style="font-size:30px;font-weight:900;color:#fff;">Owner Administration Panel</h1>
+                <p style="color:var(--text-muted);font-size:14px;">Packages, prices, sales and every server running NOVEXA.</p>
             </div>
-            <span class="badge badge-success" style="padding:8px 16px;">👑 Owner Authenticated</span>
-        </div>
-
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:20px;margin-bottom:34px;">
-            <div class="card">
-                <div style="font-size:32px;font-weight:900;color:#fff;">{guild_count}</div>
-                <div style="font-size:13px;color:var(--text-muted);">Connected Guilds</div>
-            </div>
-            <div class="card">
-                <div style="font-size:32px;font-weight:900;color:#fff;">{member_count:,}</div>
-                <div style="font-size:13px;color:var(--text-muted);">Total Monitored Members</div>
-            </div>
-            <div class="card">
-                <div style="font-size:32px;font-weight:900;color:var(--accent);">{db_size:,} KB</div>
-                <div style="font-size:13px;color:var(--text-muted);">SQLite Database File Size</div>
-            </div>
-            <div class="card">
-                <div style="font-size:32px;font-weight:900;color:#34d399;">{uptime}</div>
-                <div style="font-size:13px;color:var(--text-muted);">Core Runtime Uptime</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <a href="#packages" class="btn btn-outline" style="padding:9px 14px;font-size:13px;text-decoration:none;">Packages</a>
+                <a href="#orders" class="btn btn-outline" style="padding:9px 14px;font-size:13px;text-decoration:none;">Orders</a>
+                <a href="#servers" class="btn btn-outline" style="padding:9px 14px;font-size:13px;text-decoration:none;">Servers</a>
+                <a href="#buyers" class="btn btn-outline" style="padding:9px 14px;font-size:13px;text-decoration:none;">Buyers</a>
+                <button class="btn btn-primary" style="padding:9px 14px;font-size:13px;" onclick="location.reload()">↻ Refresh</button>
             </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(340px, 1fr));gap:24px;">
-            <div class="card">
-                <h3 style="font-size:18px;color:#fff;margin-bottom:16px;">Global Broadcast Announcement</h3>
-                <div class="form-group">
-                    <label>Announcement Text</label>
-                    <textarea class="form-control" id="owner_announcement" placeholder="Broadcast a notice to all server dashboard banners..."></textarea>
-                </div>
-                <button class="btn btn-primary" onclick="showToast('Global announcement dispatched!')">Broadcast Announcement</button>
-            </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:34px;">
+            {kpi_cards}
+        </div>
 
-            <div class="card">
-                <h3 style="font-size:18px;color:#fff;margin-bottom:16px;">Maintenance & Control</h3>
-                <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;">
-                    <div>
-                        <label>Maintenance Mode</label>
-                        <div class="desc">Block non-owner web dashboard access during upgrades.</div>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox" id="maintenance_toggle">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="btn btn-outline" style="width:100%;margin-top:10px;" onclick="showToast('Snapshot backup created!')">💾 Trigger Instant Database Snapshot</button>
-            </div>
+        <h2 id="packages" style="font-size:20px;font-weight:900;color:#fff;margin:0 0 6px;">Packages &amp; Prices</h2>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;">Edits go live on <code>/premium</code> immediately and are used for the next checkout.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;margin-bottom:40px;">
+            {plan_cards}
+        </div>
+
+        <h2 id="orders" style="font-size:20px;font-weight:900;color:#fff;margin:0 0 6px;">Orders</h2>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;">Latest 200 checkouts. “Verify” asks Cashfree for the real status and grants on the spot if it was paid.</p>
+        <div class="card" style="padding:0;overflow-x:auto;margin-bottom:40px;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px;">
+                <thead>
+                    <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;">
+                        <th style="padding:12px 8px;">Order</th>
+                        <th style="padding:12px 8px;">Server</th>
+                        <th style="padding:12px 8px;">Buyer</th>
+                        <th style="padding:12px 8px;">Plan</th>
+                        <th style="padding:12px 8px;">Amount</th>
+                        <th style="padding:12px 8px;">Status</th>
+                        <th style="padding:12px 8px;">Granted</th>
+                        <th style="padding:12px 8px;">Created</th>
+                        <th style="padding:12px 8px;"></th>
+                    </tr>
+                </thead>
+                <tbody>{order_rows}
+                </tbody>
+            </table>
+        </div>
+
+        <h2 id="servers" style="font-size:20px;font-weight:900;color:#fff;margin:0 0 6px;">Servers Running NOVEXA</h2>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;">Sorted by size. Premium tier comes from the active subscription.</p>
+        <div class="card" style="padding:0;overflow-x:auto;margin-bottom:40px;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px;">
+                <thead>
+                    <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;">
+                        <th style="padding:12px 8px;">Server</th>
+                        <th style="padding:12px 8px;">ID</th>
+                        <th style="padding:12px 8px;">Members</th>
+                        <th style="padding:12px 8px;">Owner</th>
+                        <th style="padding:12px 8px;">Plan</th>
+                    </tr>
+                </thead>
+                <tbody>{server_rows}
+                </tbody>
+            </table>
+        </div>
+
+        <h2 id="buyers" style="font-size:20px;font-weight:900;color:#fff;margin:0 0 6px;">Buyers</h2>
+        <p style="color:var(--text-muted);font-size:13px;margin:0 0 18px;">Every account that ever opened a checkout, with lifetime spend.</p>
+        <div class="card" style="padding:0;overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px;">
+                <thead>
+                    <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em;">
+                        <th style="padding:12px 8px;">Account</th>
+                        <th style="padding:12px 8px;">User ID</th>
+                        <th style="padding:12px 8px;">Paid / Orders</th>
+                        <th style="padding:12px 8px;">Spend</th>
+                        <th style="padding:12px 8px;">Last Order</th>
+                    </tr>
+                </thead>
+                <tbody>{buyer_rows}
+                </tbody>
+            </table>
         </div>
     </div>
     {_render_footer()}
+    <script>
+    async function savePlan(pid) {{
+        const val = id => document.getElementById('plan_' + pid + '_' + id).value;
+        const payload = {{
+            name: val('name'),
+            description: val('desc'),
+            price_inr: Number(val('price')),
+            tier_level: Number(val('tier')),
+            max_backups: Number(val('backups')),
+            max_ai_daily: Number(val('ai')),
+            tier_color: val('color'),
+            perks: val('perks').split(String.fromCharCode(10)).map(s => s.trim()).filter(Boolean)
+        }};
+        try {{
+            const res = await fetch('/api/admin/plans/' + encodeURIComponent(pid), {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(payload)
+            }});
+            const data = await res.json().catch(() => ({{}}));
+            if (!res.ok) return showToast(data.detail || 'Save failed', 'error');
+            showToast('Package saved — live on /premium');
+        }} catch (e) {{
+            showToast('Network error saving package', 'error');
+        }}
+    }}
+
+    async function verifyOrder(orderId) {{
+        try {{
+            const res = await fetch('/api/admin/orders/' + encodeURIComponent(orderId) + '/verify', {{ method: 'POST' }});
+            const data = await res.json().catch(() => ({{}}));
+            if (!res.ok) return showToast(data.detail || 'Verification failed', 'error');
+            showToast(data.granted ? (data.message || 'Granted') : (data.message || ('Status: ' + data.status)));
+            if (data.granted) setTimeout(() => location.reload(), 1000);
+        }} catch (e) {{
+            showToast('Network error verifying order', 'error');
+        }}
+    }}
+    </script>
 </body>
 </html>
 """

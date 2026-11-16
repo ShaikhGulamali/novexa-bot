@@ -32,6 +32,7 @@ from database.database import db
 from services.config_service import config_service
 from services.premium_service import premium_service
 from services.cashfree_service import cashfree_service
+from services.admin_service import admin_service
 from services.security_service import security_service
 from services.backup_service import backup_service
 from services.dropper_service import dropper_service
@@ -484,26 +485,62 @@ def create_app(bot) -> FastAPI:
         return {"status": "ok", "guild": livedata.guild_snapshot(guild), "members": livedata.member_rows(guild)}
 
 
+    def _is_owner(user: Optional[Dict[str, Any]]) -> bool:
+        if not user:
+            return False
+        return int(user.get("id", 0)) in OWNER_IDS
+
     @app.get("/admin", response_class=HTMLResponse)
     @app.get("/admin/dashboard", response_class=HTMLResponse)
     async def page_owner_admin(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
         if not user:
             return RedirectResponse("/login")
-
-        uid = int(user["id"])
-        if OWNER_IDS and uid not in OWNER_IDS and not user.get("is_dev"):
+        if not _is_owner(user):
             raise HTTPException(status_code=403, detail="Forbidden: Restricted to Bot Owners")
 
-        import os
-        from pathlib import Path
-        db_file = Path("database/gulamali_bot.db")
-        db_size_kb = round(os.path.getsize(db_file) / 1024) if db_file.exists() else 0
+        data = await admin_service.snapshot(bot)
+        return HTMLResponse(render_owner_dashboard(bot, user, data))
 
-        stats = {
-            "db_size_kb": db_size_kb,
-            "uptime": "99.9% (Continuous)",
+    class AdminPlanPayload(BaseModel):
+        name: Optional[str] = None
+        description: Optional[str] = None
+        price_inr: Optional[float] = None
+        tier_level: Optional[int] = None
+        max_backups: Optional[int] = None
+        max_ai_daily: Optional[int] = None
+        tier_color: Optional[str] = None
+        perks: Optional[List[str]] = None
+
+    @app.post("/api/admin/plans/{plan_id}")
+    async def api_admin_update_plan(plan_id: str, payload: AdminPlanPayload, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not _is_owner(user):
+            raise HTTPException(status_code=403, detail="Forbidden.")
+        fields = {k: v for k, v in payload.dict(exclude_unset=True).items() if v is not None}
+        result = await premium_service.update_plan(plan_id, fields)
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("reason", "Plan update failed."))
+        logger.info(f"Admin {user['id']} updated premium plan {plan_id}")
+        return {"status": "ok", "plan": result.get("plan")}
+
+    @app.post("/api/admin/orders/{order_id}/verify")
+    async def api_admin_verify_order(order_id: str, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not _is_owner(user):
+            raise HTTPException(status_code=403, detail="Forbidden.")
+        result = await premium_service.refresh_order(order_id, source=f"admin:{user['id']}")
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("reason", "Verification failed."))
+        return {
+            "status": result.get("status"),
+            "granted": bool(result.get("granted")),
+            "message": result.get("message") or result.get("reason") or "",
+            "grant": result.get("grant") or {},
         }
-        return HTMLResponse(render_owner_dashboard(bot, user, stats))
+
+    @app.get("/api/admin/overview")
+    async def api_admin_overview(user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not _is_owner(user):
+            raise HTTPException(status_code=403, detail="Forbidden.")
+        return await admin_service.snapshot(bot)
 
     # ==================== REAL-TIME SSE EVENT STREAM ====================
 
