@@ -580,6 +580,22 @@ CREATE TABLE IF NOT EXISTS "premium_subscriptions" (
     FOREIGN KEY ("plan_id") REFERENCES "premium_plans" ("plan_id") ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS "premium_orders" (
+    "order_id" TEXT PRIMARY KEY,
+    "guild_id" BIGINT NOT NULL,
+    "user_id" BIGINT NOT NULL,
+    "plan_id" TEXT NOT NULL,
+    "amount" DOUBLE PRECISION NOT NULL,
+    "currency" TEXT DEFAULT 'INR',
+    "status" TEXT DEFAULT 'CREATED',
+    "payment_id" TEXT DEFAULT '',
+    "customer_email" TEXT DEFAULT '',
+    "customer_phone" TEXT DEFAULT '',
+    "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "paid_at" TIMESTAMP,
+    "granted" INTEGER DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS "public_ai_channels" (
     "channel_id" BIGINT,
     "guild_id" BIGINT NOT NULL,

@@ -1176,7 +1176,54 @@ def render_commands(bot, user: Optional[Dict[str, Any]] = None) -> str:
 """
 
 # ==================== 4. PREMIUM PLANS ====================
-def render_premium(bot, user: Optional[Dict[str, Any]] = None) -> str:
+PREMIUM_TIER_META = {
+    "silver": {"badge": "TIER 1", "badge_cls": "badge", "badge_style": "background:rgba(148,163,184,0.15);color:#cbd5e1;", "btn": "btn-outline", "border": "#94A3B8"},
+    "gold": {"badge": "POPULAR", "badge_cls": "badge badge-accent", "badge_style": "", "btn": "btn-accent", "border": "var(--accent)"},
+    "platinum": {"badge": "UNLIMITED", "badge_cls": "badge badge-gold", "badge_style": "", "btn": "btn-outline", "border": "#fbbf24"},
+}
+
+
+def render_premium(bot, user: Optional[Dict[str, Any]] = None, plans=None, guilds=None) -> str:
+    plans = plans or []
+    guilds = guilds or []
+    logged_in = bool(user)
+    guild_options = ""
+    for g in guilds:
+        guild_options += f'<option value="{g["id"]}">{html.escape(g["name"])}</option>'
+
+    plan_cards = ""
+    for p in plans:
+        pid = p.get("plan_id", "")
+        meta = PREMIUM_TIER_META.get(pid, {"badge": "TIER", "badge_cls": "badge", "badge_style": "", "btn": "btn-outline", "border": "var(--accent)"})
+        perks = "".join(f"<li>✅ {html.escape(str(perk))}</li>" for perk in (p.get("perks") or []))
+        price = int(float(p.get("price_inr", 0)))
+        name = html.escape(str(p.get("name", pid.title())))
+        glow = "box-shadow:0 0 30px var(--accent-glow);" if pid == "gold" else ""
+        if logged_in:
+            action = f'<button class="btn {meta["btn"]}" style="width:100%;" onclick="startCheckout(\'{pid}\')">Subscribe — ₹{price}/mo</button>'
+        else:
+            action = '<a href="/login" class="btn btn-outline" style="width:100%;display:block;text-align:center;text-decoration:none;">Login to Subscribe</a>'
+        plan_cards += f"""
+            <div class="card" style="border-top:4px solid {meta['border']};{glow}display:flex;flex-direction:column;justify-content:space-between;">
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h3 style="font-size:22px;color:#fff;">{name}</h3>
+                        <span class="{meta['badge_cls']}" style="{meta['badge_style']}">{meta['badge']}</span>
+                    </div>
+                    <div style="font-size:38px;font-weight:900;color:#fff;margin-bottom:16px;">₹{price} <span style="font-size:14px;color:var(--text-muted);font-weight:500;">/ month</span></div>
+                    <ul style="list-style:none;color:var(--text-muted);font-size:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:30px;">
+                        {perks}
+                    </ul>
+                </div>
+                {action}
+            </div>"""
+
+    if not plans:
+        plan_cards = '<div class="card" style="grid-column:1/-1;">Premium plans are loading. Refresh in a moment.</div>'
+
+    checkout_guild_select = guild_options or '<option value="">No server available</option>'
+    pay_disabled = "" if (logged_in and guilds) else "disabled"
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1191,74 +1238,163 @@ def render_premium(bot, user: Optional[Dict[str, Any]] = None) -> str:
     <div class="container" style="text-align:center;">
         <div class="badge badge-gold" style="margin-bottom:16px;">VIP MEMBERSHIP</div>
         <h1 style="font-size:44px;font-weight:900;color:#fff;margin-bottom:12px;">Elevate Your Server Security & Power</h1>
-        <p style="color:var(--text-muted);max-width:600px;margin:0 auto 50px;">Configurable subscription tiers designed for ambitious Discord communities and enterprises.</p>
+        <p style="color:var(--text-muted);max-width:600px;margin:0 auto 50px;">Pay with Cashfree — UPI, cards, netbanking and wallets. Premium unlocks the instant the payment clears.</p>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(300px, 1fr));gap:24px;text-align:left;">
-            <!-- Silver -->
-            <div class="card" style="border-top:4px solid #94A3B8;display:flex;flex-direction:column;justify-content:space-between;">
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                        <h3 style="font-size:22px;color:#fff;">Silver VIP</h3>
-                        <span class="badge" style="background:rgba(148,163,184,0.15);color:#cbd5e1;">TIER 1</span>
-                    </div>
-                    <div style="font-size:38px;font-weight:900;color:#fff;margin-bottom:16px;">₹299 <span style="font-size:14px;color:var(--text-muted);font-weight:500;">/ month</span></div>
-                    <ul style="list-style:none;color:var(--text-muted);font-size:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:30px;">
-                        <li>✅ Priority Anti-Nuke Response</li>
-                        <li>✅ Up to 10 Disaster Recovery Backups</li>
-                        <li>✅ 150 Daily Autonomous AI Requests</li>
-                        <li>✅ 30-Day Audit Log History</li>
-                        <li>✅ Silver Discord Role & Badge</li>
-                    </ul>
-                </div>
-                <a href="/support" class="btn btn-outline" style="width:100%;">Upgrade to Silver</a>
-            </div>
+            {plan_cards}
+        </div>
 
-            <!-- Gold -->
-            <div class="card" style="border-top:4px solid var(--accent);box-shadow:0 0 30px var(--accent-glow);display:flex;flex-direction:column;justify-content:space-between;">
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                        <h3 style="font-size:22px;color:#fff;">Gold Elite</h3>
-                        <span class="badge badge-accent">POPULAR</span>
-                    </div>
-                    <div style="font-size:38px;font-weight:900;color:var(--accent);margin-bottom:16px;">₹599 <span style="font-size:14px;color:var(--text-muted);font-weight:500;">/ month</span></div>
-                    <ul style="list-style:none;color:var(--text-muted);font-size:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:30px;">
-                        <li>✅ Instant Sub-Second Anti-Nuke Interception</li>
-                        <li>✅ Up to 25 Disaster Recovery Backups</li>
-                        <li>✅ 500 Daily AI Coding Requests</li>
-                        <li>✅ 24/7 Dedicated Voice Mode</li>
-                        <li>✅ 90-Day Audit Log History</li>
-                        <li>✅ Gold Discord Role & Status</li>
-                    </ul>
-                </div>
-                <a href="/support" class="btn btn-accent" style="width:100%;">Upgrade to Gold</a>
-            </div>
+        <div class="card" style="margin-top:28px;text-align:left;">
+            <h3 style="font-size:16px;color:#fff;margin-bottom:10px;">How it works</h3>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 8px;">1. Pick a tier, choose your server, enter email + phone.</p>
+            <p style="color:var(--text-muted);font-size:14px;margin:0 0 8px;">2. Cashfree checkout opens — pay by UPI, card, netbanking or wallet.</p>
+            <p style="color:var(--text-muted);font-size:14px;margin:0;">3. The premium role and subscription are applied automatically the moment the payment succeeds. No staff approval needed.</p>
+        </div>
+    </div>
 
-            <!-- Platinum -->
-            <div class="card" style="border-top:4px solid var(--gold);display:flex;flex-direction:column;justify-content:space-between;">
-                <div>
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-                        <h3 style="font-size:22px;color:#fff;">Platinum Ultimate</h3>
-                        <span class="badge badge-gold">UNLIMITED</span>
-                    </div>
-                    <div style="font-size:38px;font-weight:900;color:#fbbf24;margin-bottom:16px;">₹999 <span style="font-size:14px;color:var(--text-muted);font-weight:500;">/ month</span></div>
-                    <ul style="list-style:none;color:var(--text-muted);font-size:14px;display:flex;flex-direction:column;gap:10px;margin-bottom:30px;">
-                        <li>✅ Ultimate Protection & Instant Lockdown</li>
-                        <li>✅ Unlimited Disaster Recovery Backups</li>
-                        <li>✅ 2,000 Daily AI Coding Requests</li>
-                        <li>✅ Custom Welcome Canvas Branding</li>
-                        <li>✅ 365-Day Extended Audit Retention</li>
-                        <li>✅ Personal VIP Support Concierge</li>
-                        <li>✅ Platinum Discord Role & Badge</li>
-                    </ul>
+    <div id="checkoutModal" style="display:none;position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.7);backdrop-filter:blur(3px);padding:20px;overflow-y:auto;">
+        <div class="card" style="max-width:480px;margin:40px auto;text-align:left;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <h3 style="font-size:18px;color:#fff;margin:0;" id="checkoutTitle">Checkout</h3>
+                <button class="btn btn-outline" style="padding:6px 12px;" onclick="closeCheckout()">✕</button>
+            </div>
+            <div id="checkoutForm">
+                <div class="form-group">
+                    <label>Server to upgrade</label>
+                    <select class="form-control" id="cf_guild">{checkout_guild_select}</select>
                 </div>
-                <a href="/support" class="btn btn-outline" style="width:100%;">Upgrade to Platinum</a>
+                <div class="form-group">
+                    <label>Email (receipt)</label>
+                    <input type="email" class="form-control" id="cf_email" placeholder="you@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Phone (UPI / Cashfree verification)</label>
+                    <input type="tel" class="form-control" id="cf_phone" placeholder="9876543210">
+                </div>
+                <div class="form-group">
+                    <label>Name on card (optional)</label>
+                    <input type="text" class="form-control" id="cf_name" placeholder="Your name">
+                </div>
+                <button class="btn btn-primary" style="width:100%;" id="payBtn" onclick="payNow()" {pay_disabled}>Pay securely with Cashfree</button>
+                <p style="color:var(--text-dim);font-size:12px;margin-top:12px;">Your card/UPI details never touch NOVEXA — Cashfree handles the payment page.</p>
+            </div>
+            <div id="checkoutStatus" style="display:none;text-align:center;padding:18px 0;">
+                <div style="font-size:34px;margin-bottom:10px;" id="statusIcon">⏳</div>
+                <div style="font-size:15px;color:#fff;font-weight:700;" id="statusTitle">Waiting for payment…</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-top:8px;" id="statusText">Complete the Cashfree window. This updates automatically.</div>
             </div>
         </div>
     </div>
+
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <script>
+    const PENDING_ORDER = new URLSearchParams(location.search).get('order_id');
+    let currentPlanId = null;
+
+    function showToast(msg, type) {{
+        const t = document.createElement('div');
+        t.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1500;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;background:' + (type === 'error' ? '#dc2626' : '#16a34a') + ';box-shadow:0 10px 30px rgba(0,0,0,.4);max-width:90vw;';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 5000);
+    }}
+
+    function startCheckout(planId) {{
+        currentPlanId = planId;
+        document.getElementById('checkoutTitle').textContent = 'Checkout — ' + planId.charAt(0).toUpperCase() + planId.slice(1);
+        const btn = document.getElementById('payBtn');
+        if (btn) {{ btn.disabled = false; btn.textContent = 'Pay securely with Cashfree'; }}
+        document.getElementById('checkoutForm').style.display = 'block';
+        document.getElementById('checkoutStatus').style.display = 'none';
+        document.getElementById('checkoutModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }}
+
+    function closeCheckout() {{
+        document.getElementById('checkoutModal').style.display = 'none';
+        document.body.style.overflow = '';
+    }}
+
+    function setStatus(icon, title, text) {{
+        document.getElementById('checkoutForm').style.display = 'none';
+        document.getElementById('checkoutStatus').style.display = 'block';
+        document.getElementById('statusIcon').textContent = icon;
+        document.getElementById('statusTitle').textContent = title;
+        document.getElementById('statusText').textContent = text;
+    }}
+
+    async function payNow() {{
+        const guildId = document.getElementById('cf_guild').value;
+        const email = document.getElementById('cf_email').value.trim();
+        const phone = document.getElementById('cf_phone').value.trim();
+        const name = document.getElementById('cf_name').value.trim();
+        if (!guildId) return showToast('Choose a server first', 'error');
+        if (!email) return showToast('Email is required', 'error');
+        if (!phone) return showToast('Phone number is required', 'error');
+        const btn = document.getElementById('payBtn');
+        btn.disabled = true;
+        btn.textContent = 'Creating secure order…';
+        try {{
+            const res = await fetch('/api/premium/checkout', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ plan_id: currentPlanId, guild_id: parseInt(guildId), email: email, phone: phone, name: name }})
+            }});
+            const data = await res.json().catch(() => ({{}}));
+            if (!res.ok) {{
+                btn.disabled = false;
+                btn.textContent = 'Pay securely with Cashfree';
+                return showToast(data.detail || 'Could not start checkout', 'error');
+            }}
+            setStatus('⏳', 'Waiting for payment…', 'Complete the Cashfree window. This updates automatically.');
+            const cashfree = Cashfree({{ mode: data.mode === 'sandbox' ? 'sandbox' : 'production' }});
+            const result = await cashfree.checkout({{ paymentSessionId: data.payment_session_id, redirectTarget: '_modal' }});
+            if (result && result.error) {{
+                setStatus('⚠️', 'Payment not completed', (result.error && result.error.message) || 'The Cashfree window was closed. You can try again.');
+                return;
+            }}
+            pollOrder(data.order_id, 0);
+        }} catch (e) {{
+            btn.disabled = false;
+            btn.textContent = 'Pay securely with Cashfree';
+            showToast('Network error starting checkout', 'error');
+        }}
+    }}
+
+    async function pollOrder(orderId, attempt) {{
+        try {{
+            const res = await fetch('/api/premium/order/' + encodeURIComponent(orderId));
+            const data = await res.json().catch(() => ({{}}));
+            if (data.granted) {{
+                setStatus('✅', data.plan_name + ' activated', data.message || 'Premium applied to your server. The role is on your account.');
+                showToast(data.plan_name + ' activated!', 'success');
+                return;
+            }}
+            if (data.status === 'PAID') {{
+                setStatus('⏳', 'Payment received', 'Applying premium and role — a few more seconds.');
+            }} else if (attempt > 0) {{
+                document.getElementById('statusText').textContent = 'Status: ' + (data.status || 'PENDING') + ' — still waiting for the gateway.';
+            }}
+        }} catch (e) {{}}
+        if (attempt < 40) {{
+            setTimeout(() => pollOrder(orderId, attempt + 1), 3000);
+        }} else {{
+            setStatus('⌛', 'Still processing', 'Payment may still be confirming. Refresh this page in a minute — the role is applied automatically.');
+        }}
+    }}
+
+    if (PENDING_ORDER) {{
+        document.getElementById('checkoutModal').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        setStatus('⏳', 'Checking your payment…', 'Verifying order ' + PENDING_ORDER);
+        pollOrder(PENDING_ORDER, 0);
+    }}
+    </script>
     {_render_footer()}
 </body>
 </html>
 """
+
 
 # ==================== 5. STATISTICS & TELEMETRY ====================
 def render_statistics(bot, user: Optional[Dict[str, Any]] = None) -> str:
@@ -1767,6 +1903,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
     backups_data = configs.get("backups", [])
     integrations_cfg = configs.get("integrations", {})
     premium_status = configs.get("premium", {})
+    premium_orders = configs.get("premium_orders", []) or []
     audit_history = configs.get("audit_history", [])
     settings_cfg = configs.get("settings", {})
     wallpaper_channels = configs.get("wallpaper_channels", [])
@@ -2155,6 +2292,60 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
                 <div class="card" style="margin-top:20px;">
                     <h3 style="font-size:16px;color:#fff;margin-bottom:6px;">No Ticket System Yet</h3>
                     <div class="desc">Run <code>/ticket setup</code> in Discord to publish a panel — it appears here automatically.</div>
+                </div>"""
+
+    # ==================== PREMIUM STATE ====================
+    _prem_active = bool(premium_status.get("is_premium"))
+    premium_plan_label = premium_status.get("plan_name") or "Standard Free Tier"
+    premium_tier_num = premium_status.get("tier_level") or 0
+    premium_expiry = str(premium_status.get("expires_at") or "")[:16] if _prem_active else ""
+    premium_backups = "Unlimited" if not premium_status.get("max_backups") else str(premium_status.get("max_backups"))
+    premium_ai = f"{premium_status.get('max_ai_daily') or 0:,} / day"
+    premium_orders_html = ""
+    if premium_orders:
+        order_rows_html = ""
+        for o in premium_orders:
+            o_status = str(o.get("status") or "CREATED").upper()
+            if o_status == "PAID":
+                o_bg, o_fg = "rgba(34,197,94,.15)", "#22C55E"
+            elif o_status in ("FAILED", "TERMINATED", "EXPIRED", "USER_DROPPED"):
+                o_bg, o_fg = "rgba(248,113,113,.15)", "#F87171"
+            else:
+                o_bg, o_fg = "rgba(251,191,36,.15)", "#FBBF24"
+            o_plan = str(o.get("plan_id") or "").title()
+            try:
+                o_amount = int(float(o.get("amount") or 0))
+            except (TypeError, ValueError):
+                o_amount = 0
+            o_created = str(o.get("created_at") or "—")[:16]
+            o_granted = "✅" if o.get("granted") else "—"
+            order_rows_html += f"""
+            <tr>
+                <td><code style="font-size:11.5px;">{html.escape(str(o.get('order_id')))}</code></td>
+                <td>{html.escape(o_plan)}</td>
+                <td>₹{o_amount}</td>
+                <td><span style="background:{o_bg};color:{o_fg};padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;">{html.escape(o_status)}</span></td>
+                <td>{html.escape(o_created)}</td>
+                <td>{o_granted}</td>
+            </tr>"""
+        premium_orders_html = f"""
+                <div class="card" style="margin-top:24px;">
+                    <h3 style="font-size:16px;color:#fff;margin-bottom:6px;">Cashfree Orders</h3>
+                    <div class="desc" style="margin-bottom:16px;">Every checkout opened for this server. PAID rows are granted automatically.</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;">
+                                <th style="padding:8px 10px;">Order</th>
+                                <th style="padding:8px 10px;">Plan</th>
+                                <th style="padding:8px 10px;">Amount</th>
+                                <th style="padding:8px 10px;">Status</th>
+                                <th style="padding:8px 10px;">Created</th>
+                                <th style="padding:8px 10px;">Granted</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:var(--text-muted);">{order_rows_html}
+                        </tbody>
+                    </table>
                 </div>"""
 
     return f"""<!DOCTYPE html>
@@ -3549,28 +3740,31 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             <div class="tab-pane" id="pane-premium">
                 <div class="card" style="text-align:center;padding:36px;margin-bottom:24px;">
                     <div class="badge badge-accent" style="margin-bottom:12px;">SERVER SUBSCRIPTION STATUS</div>
-                    <h2 style="font-size:28px;font-weight:900;color:#fff;margin-bottom:8px;">{premium_status.get('tier', 'FREE')} TIER</h2>
-                    <p style="color:var(--text-muted);font-size:14px;max-width:500px;margin:0 auto 20px;">{guild_name} currently enjoys enterprise security and autonomous bot automation.</p>
-                    <a href="/premium" class="btn btn-primary" style="display:inline-block;text-decoration:none;">⭐ Upgrade Server Tier</a>
+                    <h2 style="font-size:28px;font-weight:900;color:#fff;margin-bottom:8px;">{html.escape(str(premium_plan_label))}</h2>
+                    <p style="color:var(--text-muted);font-size:14px;max-width:520px;margin:0 auto 20px;">
+                        {('Tier ' + str(premium_tier_num) + ' active — expires ' + html.escape(premium_expiry) + ' UTC.') if _prem_active else 'No paid tier yet. Buy a tier and it activates instantly after Cashfree confirms the payment.'}
+                    </p>
+                    <a href="/premium" class="btn btn-primary" style="display:inline-block;text-decoration:none;">⭐ {('Extend / Change Tier' if _prem_active else 'Upgrade Server Tier')}</a>
                 </div>
 
                 <div class="card">
                     <h3 style="font-size:16px;color:#fff;margin-bottom:16px;">Active Tier Capabilities</h3>
                     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;">
                         <div style="background:#0d111b;padding:16px;border-radius:8px;border:1px solid var(--border);">
-                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ Unlimited Backups</div>
+                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ {html.escape(premium_backups)} Backups</div>
                             <div style="font-size:12px;color:var(--text-dim);">Automated disaster recovery snapshots.</div>
                         </div>
                         <div style="background:#0d111b;padding:16px;border-radius:8px;border:1px solid var(--border);">
-                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ Priority AI Engine</div>
-                            <div style="font-size:12px;color:var(--text-dim);">Zero cooldown with dedicated queue.</div>
+                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ {html.escape(premium_ai)}</div>
+                            <div style="font-size:12px;color:var(--text-dim);">Autonomous AI request quota.</div>
                         </div>
                         <div style="background:#0d111b;padding:16px;border-radius:8px;border:1px solid var(--border);">
-                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ 24/7 Voice Audio</div>
-                            <div style="font-size:12px;color:var(--text-dim);">Permanent voice channel connectivity.</div>
+                            <div style="color:#34d399;font-weight:700;margin-bottom:4px;">✓ Cashfree Instant Grant</div>
+                            <div style="font-size:12px;color:var(--text-dim);">Role + subscription applied the moment payment clears.</div>
                         </div>
                     </div>
                 </div>
+                {premium_orders_html}
             </div>
 
             <!-- Tab 31: Audit History -->

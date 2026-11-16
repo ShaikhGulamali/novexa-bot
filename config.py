@@ -64,6 +64,12 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "novexa_super_secret_session_key_20
 DASHBOARD_PORT = int(os.getenv("PORT") or os.getenv("DASHBOARD_PORT", "8080"))
 DASHBOARD_HOST = os.getenv("DASHBOARD_HOST", "0.0.0.0")
 
+# Cashfree Payment Gateway (Premium Subscriptions)
+CASHFREE_APP_ID = os.getenv("CASHFREE_APP_ID", "")
+CASHFREE_SECRET_KEY = os.getenv("CASHFREE_SECRET_KEY", "")
+CASHFREE_ENV = os.getenv("CASHFREE_ENV", "production")
+CASHFREE_API_VERSION = os.getenv("CASHFREE_API_VERSION", "2023-08-01")
+
 # Ensure base dir is at top of PATH so ffmpeg is always found globally
 os.environ["PATH"] = str(BASE_DIR) + os.pathsep + os.environ.get("PATH", "")
 

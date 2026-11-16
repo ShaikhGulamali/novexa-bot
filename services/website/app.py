@@ -30,6 +30,8 @@ from config import (
 )
 from database.database import db
 from services.config_service import config_service
+from services.premium_service import premium_service
+from services.cashfree_service import cashfree_service
 from services.security_service import security_service
 from services.backup_service import backup_service
 from services.dropper_service import dropper_service
@@ -91,6 +93,7 @@ def create_app(bot) -> FastAPI:
         redoc_url="/api/redoc",
     )
     config_service.set_bot(bot)
+    premium_service.set_bot(bot)
 
     # Dependency: Get logged-in user (Discord OAuth session only)
     def get_current_user(request: Request) -> Optional[Dict[str, Any]]:
@@ -157,7 +160,16 @@ def create_app(bot) -> FastAPI:
     @app.get("/premium", response_class=HTMLResponse)
     async def page_premium(request: Request):
         user = get_current_user(request)
-        return HTMLResponse(render_premium(bot, user))
+        guilds = []
+        if user:
+            guilds = [g for g in (user.get("guilds") or []) if g.get("bot_in_guild")]
+            if not guilds and bot and int(user["id"]) in OWNER_IDS:
+                guilds = [
+                    {"id": str(g.id), "name": g.name, "icon_url": str(g.icon.url) if g.icon else None}
+                    for g in bot.guilds
+                ]
+        plans = await premium_service.get_plans()
+        return HTMLResponse(render_premium(bot, user, plans, guilds))
 
     @app.get("/statistics", response_class=HTMLResponse)
     @app.get("/stats", response_class=HTMLResponse)
@@ -387,6 +399,7 @@ def create_app(bot) -> FastAPI:
             "integrations": integrations_cfg,
             "settings": settings_cfg,
             "premium": premium_status,
+            "premium_orders": await premium_service.recent_orders(guild_id),
             "audit_history": audit_history,
             "wallpaper_channels": await config_service.get_wallpaper_channels(guild_id),
             "dropper_members": await config_service.get_dropper_members(guild_id),
@@ -577,6 +590,81 @@ def create_app(bot) -> FastAPI:
                 except Exception:
                     msg_removed = False
         return {"status": "ok", "message": "Panel removed." + (" Announcement deleted." if msg_removed else ""), "message_deleted": msg_removed}
+
+    # ==================== CASHFREE PREMIUM CHECKOUT ====================
+
+    class CheckoutPayload(BaseModel):
+        plan_id: str
+        guild_id: int
+        email: str = ""
+        phone: str = ""
+        name: Optional[str] = ""
+
+    def _user_manages_guild(user: Dict[str, Any], guild_id: int) -> bool:
+        if int(user.get("id", 0)) in OWNER_IDS:
+            return True
+        managed = {str(g.get("id")) for g in (user.get("guilds") or [])}
+        return str(guild_id) in managed
+
+    @app.post("/api/premium/checkout")
+    async def api_premium_checkout(payload: CheckoutPayload, request: Request, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Login with Discord first.")
+        if not _user_manages_guild(user, payload.guild_id):
+            raise HTTPException(status_code=403, detail="You do not manage that server.")
+        base_url = str(request.base_url).rstrip("/")
+        result = await premium_service.create_checkout(
+            user=user,
+            guild_id=payload.guild_id,
+            plan_id=payload.plan_id,
+            email=payload.email,
+            phone=payload.phone,
+            base_url=base_url,
+            customer_name=payload.name or "",
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=400, detail=result.get("reason", "Checkout failed."))
+        return result
+
+    @app.get("/api/premium/order/{order_id}")
+    async def api_premium_order(order_id: str, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Login with Discord first.")
+        row = await premium_service.get_order_row(order_id)
+        if not row:
+            raise HTTPException(status_code=404, detail="Order not found.")
+        if int(row["user_id"]) != int(user.get("id", 0)) and int(user.get("id", 0)) not in OWNER_IDS:
+            raise HTTPException(status_code=403, detail="This order belongs to another account.")
+        result = await premium_service.refresh_order(order_id, source="page")
+        plan = await premium_service.get_plan(row["plan_id"])
+        return {
+            "status": result.get("status", row.get("status")),
+            "granted": bool(result.get("granted")),
+            "message": result.get("message") or result.get("reason") or "",
+            "plan_id": row["plan_id"],
+            "plan_name": (plan or {}).get("name", row["plan_id"].title()),
+            "amount": row.get("amount"),
+            "grant": result.get("grant") or {},
+        }
+
+    @app.post("/api/payments/cashfree/webhook")
+    async def cashfree_webhook(request: Request):
+        raw = await request.body()
+        timestamp = request.headers.get("x-webhook-timestamp", "")
+        signature = request.headers.get("x-webhook-signature", "")
+        if not cashfree_service.verify_webhook_signature(timestamp, raw, signature):
+            logger.warning("Cashfree webhook rejected: invalid signature")
+            raise HTTPException(status_code=401, detail="Invalid webhook signature.")
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body.")
+        result = await premium_service.handle_webhook(payload)
+        return {
+            "status": "ok",
+            "granted": bool(result.get("granted")),
+            "ignored": result.get("ignored"),
+        }
 
     class SecurityPayload(BaseModel):
         enabled: Optional[bool] = True

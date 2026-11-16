@@ -495,6 +495,22 @@ class DatabaseManager:
             reviewed_at TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS premium_orders (
+            order_id TEXT PRIMARY KEY,
+            guild_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            plan_id TEXT NOT NULL,
+            amount REAL NOT NULL,
+            currency TEXT DEFAULT 'INR',
+            status TEXT DEFAULT 'CREATED',
+            payment_id TEXT DEFAULT '',
+            customer_email TEXT DEFAULT '',
+            customer_phone TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            paid_at TIMESTAMP,
+            granted INTEGER DEFAULT 0
+        );
+
         -- Reaction Roles & Utility
         CREATE TABLE IF NOT EXISTS reaction_roles (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1258,6 +1274,8 @@ class DatabaseManager:
         CREATE INDEX IF NOT EXISTS idx_moderation_guild_user ON moderation_logs(guild_id, user_id);
         CREATE INDEX IF NOT EXISTS idx_warnings_guild_user ON warnings(guild_id, user_id);
         CREATE INDEX IF NOT EXISTS idx_payment_records_guild ON payment_records(guild_id, status);
+        CREATE INDEX IF NOT EXISTS idx_premium_orders_guild ON premium_orders(guild_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_premium_orders_user ON premium_orders(user_id);
         CREATE INDEX IF NOT EXISTS idx_ai_channels_guild ON ai_channels(guild_id);
         CREATE INDEX IF NOT EXISTS idx_ai_memory_user ON ai_memory(guild_id, channel_id, user_id, timestamp);
         CREATE INDEX IF NOT EXISTS idx_ai_usage_guild ON ai_usage(guild_id, timestamp);
