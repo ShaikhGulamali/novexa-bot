@@ -690,7 +690,10 @@ body.drawer-open .nav-toggle span:nth-child(3) { transform: translateY(-6px) rot
     .navbar-brand span:last-child { font-size: 15px; letter-spacing: 1px; }
     .mobile-drawer-panel { width: 100%; border-left: none; }
     .dash-content { padding: 14px 10px 64px; }
-    .dash-content table { min-width: 460px; }
+    .dash-content table { min-width: 0; width: 100%; font-size: 11.5px; }
+    .dash-content table th, .dash-content table td { padding: 6px 5px !important; }
+    .dash-content table td[style*="nowrap"], .dash-content table th[style*="nowrap"] { white-space: normal !important; }
+    .dash-content table .btn { padding: 7px 9px !important; font-size: 11px !important; margin-top: 2px; }
     .card { padding: 16px !important; border-radius: 14px; }
     .form-control { font-size: 16px; }
     h1 { font-size: 25px !important; }
