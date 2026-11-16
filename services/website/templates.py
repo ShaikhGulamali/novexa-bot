@@ -4042,7 +4042,7 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
     }}
 
     async function deleteTicket(ticketId) {{
-        const alsoChannel = confirm('Delete ticket #' + ticketId + ' from the database.\n\nOK = also delete the Discord channel\nCancel = keep the channel');
+        const alsoChannel = confirm('Delete ticket #' + ticketId + ' from the database? OK = also delete the Discord channel. Cancel = keep the channel.');
         try {{
             const res = await fetch('/api/guilds/' + GUILD_ID + '/tickets/' + ticketId + '?delete_channel=' + (alsoChannel ? '1' : '0'), {{ method: 'DELETE' }});
             let data = {{}};
