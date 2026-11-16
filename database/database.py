@@ -1072,9 +1072,9 @@ class DatabaseManager:
         CREATE TABLE IF NOT EXISTS config_audit_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             guild_id INTEGER NOT NULL,
-            module_name TEXT NOT NULL,
-            changed_by_user_id INTEGER NOT NULL,
-            changes_json TEXT NOT NULL,
+            module_name TEXT DEFAULT '',
+            changed_by_user_id INTEGER DEFAULT 0,
+            changes_json TEXT DEFAULT '{}',
             source TEXT DEFAULT 'web_dashboard',
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );

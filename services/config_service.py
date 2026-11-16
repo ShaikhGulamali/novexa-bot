@@ -87,8 +87,11 @@ class ConfigService:
         """Record configuration update in config_audit_logs."""
         try:
             query = """
-            INSERT INTO config_audit_logs (guild_id, actor_id, actor_tag, source, module, setting_key, old_value, new_value)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO config_audit_logs (
+                guild_id, actor_id, actor_tag, source, module, setting_key,
+                old_value, new_value, module_name, changed_by_user_id, changes_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """
             await db.execute(
                 query,
@@ -101,6 +104,9 @@ class ConfigService:
                     setting_key,
                     str(old_val) if old_val is not None else "",
                     str(new_val) if new_val is not None else "",
+                    module,
+                    int(actor_id or 0),
+                    json.dumps({setting_key: {"old": old_val, "new": new_val}}, default=str),
                 ),
             )
         except Exception as e:
