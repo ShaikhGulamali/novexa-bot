@@ -1620,6 +1620,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
     moderation_cfg = configs.get("moderation", {})
     mod_logs = configs.get("moderation_logs", [])
     tickets_cfg = configs.get("tickets", {})
+    ticket_panels_rows = configs.get("ticket_panels", []) or []
+    ticket_rows = configs.get("tickets_list", []) or []
     logging_cfg = configs.get("logging", {})
     roles_cfg = configs.get("roles", {})
     server_setup_cfg = configs.get("server_setup", {})
@@ -1932,6 +1934,100 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
     for tid, tname in templates_50:
         sel = "selected" if curr_tpl == tid else ""
         server_setup_options += f'<option value="{tid}" {sel}>{tname}</option>'
+
+    # ==================== LIVE TICKET STATE (bot-created rows included) ====================
+    def _chan_name(cid):
+        try:
+            ch = guild.get_channel(int(cid)) if cid else None
+        except (TypeError, ValueError):
+            ch = None
+        return f"#{html.escape(ch.name)}" if ch else "—"
+
+    ticket_panels_html = ""
+    if ticket_panels_rows:
+        panel_rows_html = ""
+        for p in ticket_panels_rows:
+            support = guild.get_role(int(p["support_role_id"])) if p.get("support_role_id") else None
+            panel_rows_html += f"""
+            <tr>
+                <td>{_chan_name(p.get('channel_id'))}</td>
+                <td>{html.escape(str(p.get('title') or 'Support Ticket'))}</td>
+                <td>{('@' + html.escape(support.name)) if support else '—'}</td>
+                <td>{_chan_name(p.get('transcript_channel_id')) if p.get('transcript_channel_id') else '—'}</td>
+                <td style="white-space:nowrap;">
+                    <button class="btn btn-outline" style="padding:6px 12px;font-size:12px;" onclick="editTicketPanel('{html.escape(str(p.get('panel_id')))}')">Edit</button>
+                    <button class="btn btn-danger" style="padding:6px 12px;font-size:12px;" onclick="deleteTicketPanel('{html.escape(str(p.get('panel_id')))}')">Delete</button>
+                </td>
+            </tr>"""
+        ticket_panels_html = f"""
+                <div class="card" style="margin-top:20px;">
+                    <h3 style="font-size:16px;color:#fff;margin-bottom:6px;">Live Ticket Panels</h3>
+                    <div class="desc" style="margin-bottom:16px;">Panels created by NOVEXA in Discord, including anything set up with slash commands.</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;">
+                                <th style="padding:8px 10px;">Channel</th>
+                                <th style="padding:8px 10px;">Title</th>
+                                <th style="padding:8px 10px;">Support Role</th>
+                                <th style="padding:8px 10px;">Transcripts</th>
+                                <th style="padding:8px 10px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:var(--text-muted);">{panel_rows_html}
+                        </tbody>
+                    </table>
+                </div>"""
+
+    ticket_live_html = ""
+    if ticket_rows:
+        ticket_tr_html = ""
+        for t in ticket_rows:
+            status = (t.get("status") or "open").lower()
+            badge_bg = "rgba(34,197,94,.15)" if status == "open" else "rgba(248,113,113,.15)"
+            badge_fg = "#22C55E" if status == "open" else "#F87171"
+            tid_value = t.get("id")
+            close_btn = (
+                '<button class="btn btn-outline" style="padding:6px 10px;font-size:12px;" '
+                'onclick="closeTicket(' + str(tid_value) + ')">Close</button>'
+            ) if status == "open" else ""
+            author_mention = "<@" + str(t.get("author_id")) + ">"
+            created = str(t.get("created_at") or "—")[:16]
+            ticket_tr_html += f"""
+            <tr>
+                <td>#{t.get('ticket_number', '?')}</td>
+                <td>{author_mention}</td>
+                <td>{_chan_name(t.get('channel_id'))}</td>
+                <td><span style="background:{badge_bg};color:{badge_fg};padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;">{html.escape(status.upper())}</span></td>
+                <td>{created}</td>
+                <td style="white-space:nowrap;">{close_btn}
+                    <button class="btn btn-danger" style="padding:6px 10px;font-size:12px;" onclick="deleteTicket({tid_value})">Delete</button>
+                </td>
+            </tr>"""
+        ticket_live_html = f"""
+                <div class="card" style="margin-top:20px;">
+                    <h3 style="font-size:16px;color:#fff;margin-bottom:6px;">Recent Tickets</h3>
+                    <div class="desc" style="margin-bottom:16px;">Every ticket NOVEXA has opened here — close or delete from the dashboard.</div>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                        <thead>
+                            <tr style="text-align:left;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;">
+                                <th style="padding:8px 10px;">#</th>
+                                <th style="padding:8px 10px;">Opened By</th>
+                                <th style="padding:8px 10px;">Channel</th>
+                                <th style="padding:8px 10px;">Status</th>
+                                <th style="padding:8px 10px;">Created</th>
+                                <th style="padding:8px 10px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:var(--text-muted);">{ticket_tr_html}
+                        </tbody>
+                    </table>
+                </div>"""
+    elif not ticket_panels_rows:
+        ticket_live_html = """
+                <div class="card" style="margin-top:20px;">
+                    <h3 style="font-size:16px;color:#fff;margin-bottom:6px;">No Ticket System Yet</h3>
+                    <div class="desc">Run <code>/ticket setup</code> in Discord to publish a panel — it appears here automatically.</div>
+                </div>"""
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -2695,6 +2791,8 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
                         <textarea class="form-control" id="tickets_panel_description">{html.escape(tickets_cfg.get('panel_description') or 'Click the button below to open a private ticket with our team.')}</textarea>
                     </div>
                 </div>
+                {ticket_panels_html}
+                {ticket_live_html}
             </div>
 
             <!-- Tab 13: Logging -->
@@ -3777,6 +3875,73 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
             if(res.ok) {{
                 showToast('Whitelist entry removed!');
                 setTimeout(() => location.reload(), 800);
+            }}
+        }} catch(e) {{ showToast('Network error', 'error'); }}
+    }}
+
+    async function editTicketPanel(panelId) {{
+        try {{
+            const res = await fetch('/api/guilds/' + GUILD_ID + '/tickets/live');
+            const data = await res.json();
+            const panel = (data.panels || []).find(p => String(p.panel_id) === String(panelId));
+            if(!panel) return showToast('Panel not found', 'error');
+            const setVal = (id, v) => {{
+                const el = document.getElementById(id);
+                if(el) el.value = (v === null || v === undefined) ? '' : String(v);
+            }};
+            setVal('tickets_category_id', panel.category_id);
+            setVal('tickets_support_role_id', panel.support_role_id);
+            setVal('tickets_transcript_channel_id', panel.transcript_channel_id);
+            setVal('tickets_panel_title', panel.title);
+            setVal('tickets_panel_description', panel.description);
+            const en = document.getElementById('tickets_tickets_enabled');
+            if(en) en.checked = true;
+            document.getElementById('pane-tickets')?.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+            showToast('Panel loaded into the editor — change fields and save');
+        }} catch(e) {{ showToast('Network error', 'error'); }}
+    }}
+
+    async function closeTicket(ticketId) {{
+        if(!confirm('Mark ticket #' + ticketId + ' as closed?')) return;
+        try {{
+            const res = await fetch('/api/guilds/' + GUILD_ID + '/tickets/' + ticketId + '/close', {{ method: 'POST' }});
+            let data = {{}};
+            try {{ data = await res.json(); }} catch(e) {{}}
+            if(res.ok) {{
+                showToast(data.message || ('Ticket #' + ticketId + ' closed'));
+                setTimeout(() => location.reload(), 800);
+            }} else {{
+                showToast('Failed: ' + (data.detail || res.statusText), 'error');
+            }}
+        }} catch(e) {{ showToast('Network error', 'error'); }}
+    }}
+
+    async function deleteTicket(ticketId) {{
+        const alsoChannel = confirm('Delete ticket #' + ticketId + ' from the database.\n\nOK = also delete the Discord channel\nCancel = keep the channel');
+        try {{
+            const res = await fetch('/api/guilds/' + GUILD_ID + '/tickets/' + ticketId + '?delete_channel=' + (alsoChannel ? '1' : '0'), {{ method: 'DELETE' }});
+            let data = {{}};
+            try {{ data = await res.json(); }} catch(e) {{}}
+            if(res.ok) {{
+                showToast(data.message || ('Ticket #' + ticketId + ' deleted'));
+                setTimeout(() => location.reload(), 800);
+            }} else {{
+                showToast('Failed: ' + (data.detail || res.statusText), 'error');
+            }}
+        }} catch(e) {{ showToast('Network error', 'error'); }}
+    }}
+
+    async function deleteTicketPanel(panelId) {{
+        if(!confirm('Delete ticket panel ' + panelId + '? The panel message will be removed from Discord.')) return;
+        try {{
+            const res = await fetch('/api/guilds/' + GUILD_ID + '/ticket_panels/' + encodeURIComponent(panelId), {{ method: 'DELETE' }});
+            let data = {{}};
+            try {{ data = await res.json(); }} catch(e) {{}}
+            if(res.ok) {{
+                showToast(data.message || 'Ticket panel deleted');
+                setTimeout(() => location.reload(), 800);
+            }} else {{
+                showToast('Failed: ' + (data.detail || res.statusText), 'error');
             }}
         }} catch(e) {{ showToast('Network error', 'error'); }}
     }}

@@ -717,6 +717,58 @@ class ConfigService:
         await self.broadcaster.broadcast(guild_id, "tickets_updated", updates)
         return await self.get_tickets_config(guild_id)
 
+    async def list_ticket_panels(self, guild_id: int) -> List[Dict[str, Any]]:
+        rows = await db.fetchall(
+            "SELECT * FROM ticket_panels WHERE guild_id = ? ORDER BY rowid DESC;", (guild_id,)
+        )
+        return [dict(r) for r in rows]
+
+    async def delete_ticket_panel(self, guild_id: int, panel_id: str) -> Dict[str, Any]:
+        row = await db.fetchone(
+            "SELECT channel_id, message_id FROM ticket_panels WHERE guild_id = ? AND panel_id = ?;",
+            (guild_id, panel_id),
+        )
+        if not row:
+            return {"ok": False, "reason": "Panel not found."}
+        await db.execute(
+            "DELETE FROM ticket_panels WHERE guild_id = ? AND panel_id = ?;", (guild_id, panel_id)
+        )
+        return {"ok": True, "channel_id": row["channel_id"], "message_id": row["message_id"]}
+
+    async def list_tickets(self, guild_id: int, status: Optional[str] = None, limit: int = 40) -> List[Dict[str, Any]]:
+        if status:
+            rows = await db.fetchall(
+                "SELECT * FROM tickets WHERE guild_id = ? AND status = ? ORDER BY id DESC LIMIT ?;",
+                (guild_id, status, limit),
+            )
+        else:
+            rows = await db.fetchall(
+                "SELECT * FROM tickets WHERE guild_id = ? ORDER BY id DESC LIMIT ?;",
+                (guild_id, limit),
+            )
+        return [dict(r) for r in rows]
+
+    async def update_ticket(self, guild_id: int, ticket_id: int, status: str) -> bool:
+        row = await db.fetchone(
+            "SELECT id FROM tickets WHERE guild_id = ? AND id = ?;", (guild_id, ticket_id)
+        )
+        if not row:
+            return False
+        await db.execute(
+            "UPDATE tickets SET status = ?, closed_at = CURRENT_TIMESTAMP WHERE guild_id = ? AND id = ?;",
+            (status, guild_id, ticket_id),
+        )
+        return True
+
+    async def delete_ticket(self, guild_id: int, ticket_id: int) -> Optional[int]:
+        row = await db.fetchone(
+            "SELECT channel_id FROM tickets WHERE guild_id = ? AND id = ?;", (guild_id, ticket_id)
+        )
+        if not row:
+            return None
+        await db.execute("DELETE FROM tickets WHERE guild_id = ? AND id = ?;", (guild_id, ticket_id))
+        return row["channel_id"]
+
     # ==================== 17. LOGGING CONFIG ====================
     async def get_logging_config(self, guild_id: int) -> Dict[str, Any]:
         row = await db.fetchone("SELECT * FROM logging_config WHERE guild_id = ?;", (guild_id,))

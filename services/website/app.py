@@ -333,6 +333,8 @@ def create_app(bot) -> FastAPI:
         moderation_cfg = await config_service.get_moderation_config(guild_id)
         mod_logs = await config_service.get_moderation_logs(guild_id)
         tickets_cfg = await config_service.get_tickets_config(guild_id)
+        ticket_panels_data = await config_service.list_ticket_panels(guild_id)
+        ticket_rows = await config_service.list_tickets(guild_id, limit=40)
         logging_cfg = await config_service.get_logging_config(guild_id)
         music_cfg = await config_service.get_music_config(guild_id)
         economy_cfg = await config_service.get_economy_settings(guild_id)
@@ -365,6 +367,8 @@ def create_app(bot) -> FastAPI:
             "moderation": moderation_cfg,
             "moderation_logs": mod_logs,
             "tickets": tickets_cfg,
+            "ticket_panels": ticket_panels_data,
+            "tickets_list": ticket_rows,
             "logging": logging_cfg,
             "roles": roles_cfg,
             "server_setup": server_setup_cfg,
@@ -515,6 +519,64 @@ def create_app(bot) -> FastAPI:
             guild_id, data, actor_id=int(user["id"]), actor_tag=user["username"], source="WEBSITE"
         )
         return {"status": "ok", "config": updated}
+
+    @app.get("/api/guilds/{guild_id}/tickets/live")
+    async def api_tickets_live(guild_id: int, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return {
+            "status": "ok",
+            "panels": await config_service.list_ticket_panels(guild_id),
+            "tickets": await config_service.list_tickets(guild_id, limit=40),
+        }
+
+    @app.post("/api/guilds/{guild_id}/tickets/{ticket_id}/close")
+    async def api_ticket_close(guild_id: int, ticket_id: int, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        ok = await config_service.update_ticket(guild_id, ticket_id, "closed")
+        if not ok:
+            raise HTTPException(status_code=404, detail="Ticket not found.")
+        return {"status": "ok", "message": "Ticket closed."}
+
+    @app.delete("/api/guilds/{guild_id}/tickets/{ticket_id}")
+    async def api_ticket_delete(guild_id: int, ticket_id: int, delete_channel: int = 0, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        channel_id = await config_service.delete_ticket(guild_id, ticket_id)
+        if channel_id is None:
+            raise HTTPException(status_code=404, detail="Ticket not found.")
+        removed = False
+        if delete_channel:
+            guild = bot.get_guild(guild_id) if hasattr(bot, "get_guild") else None
+            channel = guild.get_channel(int(channel_id)) if guild and channel_id else None
+            if channel:
+                try:
+                    await channel.delete(reason=f"Ticket #{ticket_id} deleted from dashboard by {user['username']}")
+                    removed = True
+                except Exception:
+                    removed = False
+        return {"status": "ok", "message": "Ticket deleted." + (" Channel removed." if removed else ""), "channel_deleted": removed}
+
+    @app.delete("/api/guilds/{guild_id}/ticket_panels/{panel_id}")
+    async def api_ticket_panel_delete(guild_id: int, panel_id: str, user: Optional[Dict[str, Any]] = Depends(get_current_user)):
+        if not user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        res = await config_service.delete_ticket_panel(guild_id, panel_id)
+        if not res.get("ok"):
+            raise HTTPException(status_code=404, detail=res.get("reason", "Panel not found."))
+        msg_removed = False
+        guild = bot.get_guild(guild_id) if hasattr(bot, "get_guild") else None
+        if guild and res.get("message_id"):
+            channel = guild.get_channel(int(res["channel_id"])) if res.get("channel_id") else None
+            if channel:
+                try:
+                    msg = await channel.fetch_message(int(res["message_id"]))
+                    await msg.delete()
+                    msg_removed = True
+                except Exception:
+                    msg_removed = False
+        return {"status": "ok", "message": "Panel removed." + (" Announcement deleted." if msg_removed else ""), "message_deleted": msg_removed}
 
     class SecurityPayload(BaseModel):
         enabled: Optional[bool] = True
