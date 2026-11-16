@@ -523,7 +523,7 @@ class ConfigService:
         return d
 
     async def get_premium_plans(self) -> List[Dict[str, Any]]:
-        rows = await db.fetchall("SELECT * FROM premium_plans WHERE is_active = 1 ORDER BY tier_level ASC;")
+        rows = await db.fetchall("SELECT * FROM premium_plans ORDER BY tier_level ASC;")
         plans = []
         for r in rows:
             d = dict(r)
@@ -655,7 +655,7 @@ class ConfigService:
         return await self.get_moderation_config(guild_id)
 
     async def get_moderation_logs(self, guild_id: int, limit: int = 15) -> List[Dict[str, Any]]:
-        rows = await db.fetchall("SELECT * FROM moderation_logs WHERE guild_id = ? ORDER BY timestamp DESC LIMIT ?;", (guild_id, limit))
+        rows = await db.fetchall("SELECT * FROM moderation_logs WHERE guild_id = ? ORDER BY created_at DESC LIMIT ?;", (guild_id, limit))
         return [dict(r) for r in rows]
 
     # ==================== 16. TICKETS CONFIG ====================
