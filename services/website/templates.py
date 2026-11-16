@@ -520,6 +520,128 @@ input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible
 }
 """
 
+BASE_CSS += """
+/* ==================== MOBILE LAYER ==================== */
+.nav-toggle {
+    display: none;
+    background: rgba(255, 45, 85, .12);
+    border: 1px solid var(--border);
+    color: #fff;
+    font-size: 20px;
+    line-height: 1;
+    padding: 8px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+@media (max-width: 900px) {
+    .navbar {
+        padding: 12px 16px;
+        gap: 10px;
+        flex-wrap: nowrap;
+    }
+    .navbar-brand { font-size: 17px; gap: 8px; }
+    .navbar-brand span:first-child { font-size: 20px !important; }
+    .nav-toggle { display: block; flex: 0 0 auto; }
+
+    .nav-links {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 2px;
+        padding: 10px 14px 16px;
+        background: #0a0507;
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, .55);
+        max-height: 72vh;
+        overflow-y: auto;
+        z-index: 999;
+    }
+    .navbar.nav-open .nav-links { display: flex; }
+    .nav-links a {
+        display: block;
+        padding: 12px 10px;
+        font-size: 15px;
+        border-radius: 8px;
+    }
+    .nav-links a:hover { background: rgba(255, 45, 85, .1); }
+
+    .navbar > div[style*="display:flex"] { gap: 8px !important; }
+    .navbar img[style*="width:32px"] { width: 28px !important; height: 28px !important; }
+
+    .dash-layout { flex-direction: column; }
+    .dash-sidebar {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+        position: sticky;
+        top: 58px;
+        z-index: 40;
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        padding: 10px 12px;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        overflow-y: hidden;
+        background: #0a0507;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .dash-sidebar::-webkit-scrollbar { display: none; }
+    .dash-sidebar > div { display: none; }
+    .dash-tab-btn {
+        width: auto;
+        flex: 0 0 auto;
+        white-space: nowrap;
+        margin: 0;
+        padding: 9px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 12.5px;
+    }
+    .dash-content { padding: 18px 14px 64px; }
+    .dash-content h1, .dash-content h2 { font-size: 22px; }
+    .tab-pane .card, .dash-content .card { overflow-x: auto; }
+    .dash-content table { min-width: 520px; }
+
+    div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; gap: 12px !important; }
+    div[style*="grid-template-columns:2fr 1fr"] { grid-template-columns: 1fr !important; gap: 12px !important; }
+    div[style*="grid-template-columns:2fr auto"] { grid-template-columns: 1fr !important; gap: 12px !important; }
+    div[style*="grid-template-columns:2fr 2fr auto"] { grid-template-columns: 1fr !important; gap: 12px !important; }
+
+    .container { padding: 24px 16px 48px; }
+    h1 { font-size: 30px !important; letter-spacing: -0.8px; }
+    h2 { font-size: 24px !important; }
+    p, li { font-size: 14.5px; }
+    .btn { max-width: 100%; }
+    .toast { left: 12px; right: 12px; bottom: 12px; max-width: none; }
+    pre, code { overflow-x: auto; max-width: 100%; }
+    img { max-width: 100%; height: auto; }
+    .footer-links { flex-wrap: wrap; gap: 10px 16px; }
+}
+
+@media (max-width: 560px) {
+    div[style*="minmax(320px"] { grid-template-columns: 1fr !important; }
+    div[style*="minmax(300px"] { grid-template-columns: 1fr !important; }
+    div[style*="minmax(280px"] { grid-template-columns: 1fr !important; }
+    .navbar { padding: 10px 12px; }
+    .navbar-brand span:last-child { font-size: 15px; letter-spacing: 1px; }
+    .dash-content { padding: 14px 10px 64px; }
+    .dash-sidebar { top: 54px; }
+    .card { padding: 16px !important; border-radius: 14px; }
+    .form-control { font-size: 16px; }
+    h1 { font-size: 25px !important; }
+    h2 { font-size: 20px !important; }
+    .btn { padding: 11px 16px; font-size: 14px; }
+}
+"""
+
 def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home") -> str:
     user_section = ""
     if user:
@@ -558,6 +680,7 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
             <li><a href="/support" class="{'active' if active_tab == 'support' else ''}">Support</a></li>
         </ul>
         {user_section}
+        <button class="nav-toggle" type="button" aria-label="Toggle menu" onclick="document.querySelector('.navbar').classList.toggle('nav-open')">☰</button>
     </nav>
     """
 
