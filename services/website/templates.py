@@ -526,15 +526,29 @@ BASE_CSS += """
     display: none;
     background: rgba(255, 45, 85, .12);
     border: 1px solid var(--border);
-    color: #fff;
-    font-size: 20px;
-    line-height: 1;
-    padding: 8px 12px;
     border-radius: 10px;
     cursor: pointer;
+    padding: 10px 11px;
+    flex: 0 0 auto;
 }
+.nav-toggle span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: #fff;
+    margin: 4px 0;
+    transition: transform .2s ease, opacity .2s ease;
+}
+body.drawer-open .nav-toggle span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+body.drawer-open .nav-toggle span:nth-child(2) { opacity: 0; }
+body.drawer-open .nav-toggle span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.mobile-drawer { display: none; }
 
 @media (max-width: 900px) {
+    body.drawer-open { overflow: hidden; }
+
     .navbar {
         padding: 12px 16px;
         gap: 10px;
@@ -542,77 +556,117 @@ BASE_CSS += """
     }
     .navbar-brand { font-size: 17px; gap: 8px; }
     .navbar-brand span:first-child { font-size: 20px !important; }
-    .nav-toggle { display: block; flex: 0 0 auto; }
+    .nav-toggle { display: block; }
+    .nav-links { display: none !important; }
+    .navbar > div[style*="display:flex"] { display: none !important; }
 
-    .nav-links {
-        display: none;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 2px;
-        padding: 10px 14px 16px;
-        background: #0a0507;
-        border-bottom: 1px solid var(--border);
-        box-shadow: 0 18px 40px rgba(0, 0, 0, .55);
-        max-height: 72vh;
-        overflow-y: auto;
-        z-index: 999;
-    }
-    .navbar.nav-open .nav-links { display: flex; }
-    .nav-links a {
+    .mobile-drawer {
         display: block;
-        padding: 12px 10px;
-        font-size: 15px;
-        border-radius: 8px;
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity .22s ease;
     }
-    .nav-links a:hover { background: rgba(255, 45, 85, .1); }
-
-    .navbar > div[style*="display:flex"] { gap: 8px !important; }
-    .navbar img[style*="width:32px"] { width: 28px !important; height: 28px !important; }
+    body.drawer-open .mobile-drawer { pointer-events: auto; opacity: 1; }
+    .mobile-drawer-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, .62);
+        backdrop-filter: blur(2px);
+    }
+    .mobile-drawer-panel {
+        position: absolute;
+        top: 0;
+        right: 0;
+        height: 100%;
+        width: min(88vw, 360px);
+        display: flex;
+        flex-direction: column;
+        background: #0a0507;
+        border-left: 1px solid var(--border);
+        box-shadow: -24px 0 60px rgba(0, 0, 0, .65);
+        transform: translateX(100%);
+        transition: transform .24s ease;
+    }
+    body.drawer-open .mobile-drawer-panel { transform: translateX(0); }
+    .mobile-drawer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border);
+        flex: 0 0 auto;
+    }
+    .mobile-drawer-title {
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: var(--text-dim);
+    }
+    .mobile-drawer-close {
+        background: rgba(255, 45, 85, .12);
+        border: 1px solid var(--border);
+        color: #fff;
+        font-size: 16px;
+        line-height: 1;
+        padding: 8px 11px;
+        border-radius: 10px;
+        cursor: pointer;
+    }
+    .mobile-drawer-scroll {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 8px 14px 40px;
+    }
+    .mobile-drawer-section {
+        font-size: 11px;
+        font-weight: 800;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        padding: 18px 6px 8px;
+    }
+    .mobile-drawer-link {
+        display: block;
+        padding: 13px 12px;
+        border-radius: 10px;
+        color: #e7e9ee;
+        font-size: 15px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .mobile-drawer-link:active,
+    .mobile-drawer-link:hover { background: rgba(255, 45, 85, .12); }
+    .mobile-modules {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .mobile-modules .dash-tab-btn {
+        width: 100%;
+        margin: 0;
+        padding: 12px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, .03);
+    }
+    .mobile-modules .dash-tab-btn:hover { transform: none; }
 
     .dash-layout { flex-direction: column; }
-    .dash-sidebar {
-        width: 100%;
-        height: auto;
-        min-height: 0;
-        position: sticky;
-        top: 58px;
-        z-index: 40;
-        display: flex;
-        flex-direction: row;
-        gap: 6px;
-        padding: 10px 12px;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        overflow-x: auto;
-        overflow-y: hidden;
-        background: #0a0507;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-    }
-    .dash-sidebar::-webkit-scrollbar { display: none; }
-    .dash-sidebar > div { display: none; }
-    .dash-tab-btn {
-        width: auto;
-        flex: 0 0 auto;
-        white-space: nowrap;
-        margin: 0;
-        padding: 9px 14px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        font-size: 12.5px;
-    }
+    .dash-sidebar { display: none; }
     .dash-content { padding: 18px 14px 64px; }
     .dash-content h1, .dash-content h2 { font-size: 22px; }
-    .tab-pane .card, .dash-content .card { overflow-x: auto; }
+    .tab-pane .card, .dash-content .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .dash-content table { min-width: 520px; }
+    .dash-content > div[style*="justify-content:space-between"] .btn { width: 100%; }
 
     div[style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; gap: 12px !important; }
     div[style*="grid-template-columns:2fr 1fr"] { grid-template-columns: 1fr !important; gap: 12px !important; }
     div[style*="grid-template-columns:2fr auto"] { grid-template-columns: 1fr !important; gap: 12px !important; }
+    div[style*="grid-template-columns:2fr 1fr auto"] { grid-template-columns: 1fr !important; gap: 12px !important; }
     div[style*="grid-template-columns:2fr 2fr auto"] { grid-template-columns: 1fr !important; gap: 12px !important; }
 
     .container { padding: 24px 16px 48px; }
@@ -627,13 +681,15 @@ BASE_CSS += """
 }
 
 @media (max-width: 560px) {
+    div[style*="minmax(340px"] { grid-template-columns: 1fr !important; }
     div[style*="minmax(320px"] { grid-template-columns: 1fr !important; }
     div[style*="minmax(300px"] { grid-template-columns: 1fr !important; }
     div[style*="minmax(280px"] { grid-template-columns: 1fr !important; }
     .navbar { padding: 10px 12px; }
     .navbar-brand span:last-child { font-size: 15px; letter-spacing: 1px; }
+    .mobile-drawer-panel { width: 100%; border-left: none; }
     .dash-content { padding: 14px 10px 64px; }
-    .dash-sidebar { top: 54px; }
+    .dash-content table { min-width: 460px; }
     .card { padding: 16px !important; border-radius: 14px; }
     .form-control { font-size: 16px; }
     h1 { font-size: 25px !important; }
@@ -662,6 +718,13 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
         <a href="/login" class="btn btn-primary" style="padding:8px 18px;font-size:13px;">Login with Discord</a>
         """
 
+    account_links = """
+            <a href="/login" class="mobile-drawer-link">Login with Discord</a>
+        """ if not user else f"""
+            <a href="/dashboard" class="mobile-drawer-link">⚡ Dashboard</a>
+            <a href="/api/auth/logout" class="mobile-drawer-link" style="color:var(--danger);">Logout</a>
+        """
+
     return f"""
     <nav class="navbar">
         <a href="/" class="navbar-brand">
@@ -680,8 +743,69 @@ def _render_nav(user: Optional[Dict[str, Any]] = None, active_tab: str = "home")
             <li><a href="/support" class="{'active' if active_tab == 'support' else ''}">Support</a></li>
         </ul>
         {user_section}
-        <button class="nav-toggle" type="button" aria-label="Toggle menu" onclick="document.querySelector('.navbar').classList.toggle('nav-open')">☰</button>
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="mobileDrawer" onclick="toggleMobileDrawer()">
+            <span></span><span></span><span></span>
+        </button>
     </nav>
+
+    <div class="mobile-drawer" id="mobileDrawer" aria-hidden="true">
+        <div class="mobile-drawer-backdrop" onclick="toggleMobileDrawer(false)"></div>
+        <aside class="mobile-drawer-panel" role="dialog" aria-modal="true" aria-label="Site menu">
+            <div class="mobile-drawer-head">
+                <span class="mobile-drawer-title">MENU</span>
+                <button class="mobile-drawer-close" type="button" aria-label="Close menu" onclick="toggleMobileDrawer(false)">✕</button>
+            </div>
+            <div class="mobile-drawer-scroll">
+                <div class="mobile-drawer-section">Pages</div>
+                <a href="/" class="mobile-drawer-link">Home</a>
+                <a href="/features" class="mobile-drawer-link">Features</a>
+                <a href="/commands" class="mobile-drawer-link">Commands</a>
+                <a href="/premium" class="mobile-drawer-link">Premium</a>
+                <a href="/statistics" class="mobile-drawer-link">Statistics</a>
+                <a href="/status" class="mobile-drawer-link">Status</a>
+                <a href="/docs" class="mobile-drawer-link">Docs</a>
+                <a href="/faq" class="mobile-drawer-link">FAQ</a>
+                <a href="/support" class="mobile-drawer-link">Support</a>
+                <div class="mobile-drawer-section" id="mobileModulesSection">Server Modules</div>
+                <div class="mobile-modules" id="mobileModulesList"></div>
+                <div class="mobile-drawer-section">Account</div>
+                {account_links}
+            </div>
+        </aside>
+    </div>
+
+    <script>
+    function toggleMobileDrawer(force) {{
+        const drawer = document.getElementById('mobileDrawer');
+        if (!drawer) return;
+        const open = (typeof force === 'boolean') ? force : !document.body.classList.contains('drawer-open');
+        document.body.classList.toggle('drawer-open', open);
+        drawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+        const btn = document.querySelector('.nav-toggle');
+        if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (open) hydrateMobileModules();
+    }}
+    function hydrateMobileModules() {{
+        const list = document.getElementById('mobileModulesList');
+        const source = document.querySelector('.dash-sidebar');
+        if (!list) return;
+        if (!source) {{
+            document.getElementById('mobileModulesSection')?.remove();
+            return;
+        }}
+        if (list.dataset.ready === '1') return;
+        source.querySelectorAll('.dash-tab-btn').forEach(el => {{
+            const clone = el.cloneNode(true);
+            clone.removeAttribute('id');
+            clone.classList.remove('active');
+            clone.addEventListener('click', () => toggleMobileDrawer(false));
+            list.appendChild(clone);
+        }});
+        list.dataset.ready = '1';
+    }}
+    document.addEventListener('keydown', e => {{ if (e.key === 'Escape') toggleMobileDrawer(false); }});
+    window.addEventListener('resize', () => {{ if (window.innerWidth > 900) toggleMobileDrawer(false); }});
+    </script>
     """
 
 def _render_footer() -> str:
