@@ -707,19 +707,24 @@ def create_app(bot) -> FastAPI:
             await config_service.broadcaster.broadcast(guild_id, "lockdown_triggered", {"locked": False})
             return {"status": "ok", "result": res}
         elif action == "test-welcome":
-            welcome_cfg = await config_service.get_welcome_config(guild_id)
-            cid = welcome_cfg.get("channel_id")
-            channel = guild.get_channel(cid) if cid else guild.system_channel
-            if channel and hasattr(channel, "send"):
-                await channel.send(f"🎨 **[NOVEXA Welcome Studio Live Test]**\nWelcome <@{user['id']}> to **{guild.name}**! Member #{guild.member_count}.")
-            return {"status": "ok", "message": "Test welcome dispatched"}
+            cog = bot.get_cog("Welcome")
+            if cog is None or not hasattr(cog, "dispatch_welcome"):
+                raise HTTPException(status_code=503, detail="Welcome module is not loaded on the bot.")
+            member = guild.get_member(int(user["id"])) or guild.me
+            result = await cog.dispatch_welcome(member, send_dm=False)
+            if not result.get("ok"):
+                raise HTTPException(status_code=400, detail=result.get("reason", "Welcome test failed."))
+            return {"status": "ok", "message": result.get("reason", "Test welcome dispatched")}
         elif action == "test-goodbye":
             welcome_cfg = await config_service.get_welcome_config(guild_id)
             cid = welcome_cfg.get("leave_channel_id")
-            channel = guild.get_channel(cid) if cid else guild.system_channel
-            if channel and hasattr(channel, "send"):
-                await channel.send(f"🚪 **[NOVEXA Goodbye Live Test]**\n**{user['username']}** has left the server. We now have {guild.member_count} members.")
-            return {"status": "ok", "message": "Test goodbye dispatched"}
+            if not cid:
+                raise HTTPException(status_code=400, detail="No goodbye channel selected. Pick one and Save.")
+            channel = guild.get_channel(int(cid))
+            if not channel or not hasattr(channel, "send"):
+                raise HTTPException(status_code=400, detail="The saved goodbye channel no longer exists.")
+            await channel.send(f"🚪 **[NOVEXA Goodbye Live Test]**\n**{user['username']}** has left the server. We now have {guild.member_count} members.")
+            return {"status": "ok", "message": f"Goodbye delivered to #{channel.name}"}
         elif action == "dispatch-embed":
             cid = int(body.get("channel_id") or 0)
             target_chan = guild.get_channel(cid) if cid else guild.system_channel

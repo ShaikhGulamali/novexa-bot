@@ -3616,10 +3616,12 @@ def render_server_dashboard(bot, user: Dict[str, Any], guild: Any, configs: Dict
         if(actionName === 'lockdown' && !confirm('WARNING: Are you sure you want to trigger an Emergency Server Lockdown? Regular members will lose send permissions!')) return;
         try {{
             const res = await fetch('/api/guilds/' + GUILD_ID + '/actions/' + actionName, {{ method: 'POST' }});
+            let data = {{}};
+            try {{ data = await res.json(); }} catch(e) {{}}
             if(res.ok) {{
-                showToast('Action ' + actionName + ' executed successfully!');
+                showToast(data.message || ('Action ' + actionName + ' executed successfully!'));
             }} else {{
-                showToast('Action failed: ' + res.statusText, 'error');
+                showToast('Failed: ' + (data.detail || res.statusText), 'error');
             }}
         }} catch(e) {{
             showToast('Action network error', 'error');

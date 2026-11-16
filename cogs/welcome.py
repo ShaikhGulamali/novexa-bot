@@ -14,7 +14,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import logging
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from database.database import db
 from utils.embeds import primary_embed, success_embed, error_embed, info_embed, warning_embed
 from utils.helpers import format_template
@@ -93,16 +93,30 @@ class Welcome(commands.Cog):
         """Handle new member join: welcome banner, embed and DM greeting."""
         if member.bot:
             return
+        await self.dispatch_welcome(member, send_dm=True)
 
+    async def dispatch_welcome(self, member: discord.Member, send_dm: bool = True) -> Dict[str, Any]:
+        """Render and deliver the configured welcome. Shared by real joins and dashboard tests."""
         row = await db.fetchone(
             "SELECT * FROM welcome_config WHERE guild_id = ?",
             (member.guild.id,)
         )
-        if not row or not row["is_enabled"]:
-            return
+        if not row:
+            return {"ok": False, "reason": "No welcome configuration saved for this server yet."}
+        if not row["is_enabled"]:
+            return {"ok": False, "reason": "Welcome system is disabled. Turn it on and Save."}
+        if not row["channel_id"]:
+            return {"ok": False, "reason": "No welcome channel selected. Pick one and Save."}
 
-        # 2. Direct Message (DM) Welcome Greeting
-        if row["dm_enabled"] and row["dm_template"]:
+        channel = member.guild.get_channel(row["channel_id"])
+        if not channel or not isinstance(channel, discord.TextChannel):
+            return {"ok": False, "reason": "The saved welcome channel no longer exists or is not a text channel."}
+
+        perms = channel.permissions_for(member.guild.me)
+        if not perms.send_messages:
+            return {"ok": False, "reason": f"NOVEXA is missing Send Messages in #{channel.name}."}
+
+        if send_dm and row["dm_enabled"] and row["dm_template"]:
             try:
                 dm_text = format_template(row["dm_template"], member)
                 dm_embed = primary_embed(
@@ -117,24 +131,11 @@ class Welcome(commands.Cog):
             except Exception as e:
                 logger.debug(f"Could not send DM to {member}: {e}")
 
-        # 3. Public Channel Welcome Announcement
-        if not row["channel_id"]:
-            return
-
-        channel = member.guild.get_channel(row["channel_id"])
-        if not channel or not isinstance(channel, discord.TextChannel):
-            return
-
-        perms = channel.permissions_for(member.guild.me)
-        if not perms.send_messages:
-            return
-
         template_id = row["template_id"] or "novexa_exclusive"
         tmpl = get_template(template_id)
         msg_template = row["message_template"] or "Welcome {user} to **{server}**! You are member #{member_count}."
         formatted_text = format_template(msg_template, member)
 
-        # Generate banner if enabled
         banner_file: Optional[discord.File] = None
         if row["banner_enabled"]:
             try:
@@ -155,7 +156,6 @@ class Welcome(commands.Cog):
             except Exception as e:
                 logger.error(f"Failed to generate welcome banner for {member}: {e}")
 
-        # Deliver message / embed
         if row["embed_enabled"] and perms.embed_links:
             title_text = row["title"] or f"👋 Welcome to {member.guild.name}!"
             title_text = format_template(title_text, member)
@@ -183,6 +183,8 @@ class Welcome(commands.Cog):
                 await channel.send(content=formatted_text, file=banner_file)
             else:
                 await channel.send(content=formatted_text)
+
+        return {"ok": True, "reason": f"Welcome delivered to #{channel.name}", "channel": channel.name, "template": template_id}
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):

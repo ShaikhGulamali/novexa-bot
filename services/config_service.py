@@ -174,7 +174,7 @@ class ConfigService:
         # The dashboard's single "enabled" master switch drives both banner and embed rows
         if "enabled" in updates:
             flag = 1 if updates["enabled"] else 0
-            updates = {**updates, "banner_enabled": flag, "embed_enabled": flag}
+            updates = {**updates, "banner_enabled": flag, "embed_enabled": flag, "is_enabled": flag}
 
         allowed = [
             "channel_id", "template_id", "banner_enabled", "embed_enabled",
